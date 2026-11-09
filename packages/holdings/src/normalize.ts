@@ -15,8 +15,8 @@ import type {
   NewHoldingInput,
 } from './types.ts'
 
-export const HOLDING_MARKETS: readonly HoldingMarket[] = ['crypto', 'us', 'cn', 'hk']
-export const HOLDING_CURRENCIES: readonly HoldingCurrency[] = ['USD', 'CNY', 'HKD', 'USDT']
+export const HOLDING_MARKETS: readonly HoldingMarket[] = ['crypto', 'us', 'cn', 'hk', 'ru']
+export const HOLDING_CURRENCIES: readonly HoldingCurrency[] = ['USD', 'CNY', 'HKD', 'USDT', 'RUB']
 export const HOLDING_KINDS: readonly HoldingKind[] = ['real', 'sim']
 
 /** 账户缺省名（契约 §2）。 */
@@ -41,6 +41,7 @@ export function defaultCurrencyForMarket(market: HoldingMarket): HoldingCurrency
     case 'us': return 'USD'
     case 'cn': return 'CNY'
     case 'hk': return 'HKD'
+    case 'ru': return 'RUB'
   }
 }
 

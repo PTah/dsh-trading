@@ -82,6 +82,7 @@ export const PROVIDER_VOCABULARY = [
   'hithink',
   'jin10',
   'xysz',
+  'tbank',
 ] as const
 export type Provider = (typeof PROVIDER_VOCABULARY)[number]
 
@@ -128,6 +129,8 @@ export const DEFAULT_MARKETS: Record<string, MarketProviderEntry> = {
   // 全球品种（2026-09-13 金十接入）：唯一 provider 为金十数据 MCP（分钟K + 报价 +
   // 品种代码表；快讯/资讯/财经日历同源）。纯数据市场，无交易面（不开下单工具）。
   global: { provider: 'jin10' },
+  // 俄股 / MOEX（T-Bank Invest REST）：行情 + 交易面；缺省 demo=sandbox host。
+  ru: { provider: 'tbank', tradeProvider: 'tbank' },
 }
 
 const MarketProviderEntrySchema = Schema.object({

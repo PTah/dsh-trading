@@ -5,8 +5,8 @@
  * 确认/编辑后才转正式（holdings）。store 只承载导入持仓（source 恒
  * 'imported'）；paper/live 是运行时源，不落本台账。
  */
-export type HoldingMarket = 'crypto' | 'us' | 'cn' | 'hk'
-export type HoldingCurrency = 'USD' | 'CNY' | 'HKD' | 'USDT'
+export type HoldingMarket = 'crypto' | 'us' | 'cn' | 'hk' | 'ru'
+export type HoldingCurrency = 'USD' | 'CNY' | 'HKD' | 'USDT' | 'RUB'
 export type HoldingKind = 'real' | 'sim'
 
 export interface Holding {

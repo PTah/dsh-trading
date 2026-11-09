@@ -6,9 +6,9 @@ import { jsonItems, jsonOutput, jsonPayload } from './tool-output.ts'
 import type { Interval, MarketDataService } from '@dshtrading/api'
 export const name = 'dsh-trading-research-market-data'
 export const inject = ['tools']
-export interface Config { markets: Array<'crypto' | 'us' | 'cn' | 'hk' | 'futures' | 'global'> }
+export interface Config { markets: Array<'crypto' | 'us' | 'cn' | 'hk' | 'futures' | 'global' | 'ru'> }
 export const Config: Schema<Config> = Schema.object({
-  markets: Schema.array(Schema.union(['crypto', 'us', 'cn', 'hk', 'futures', 'global'])).default([]),
+  markets: Schema.array(Schema.union(['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'])).default([]),
 })
 interface Registry { active(market: string): { provider: string; service: MarketDataService } | undefined }
 const INTERVALS: Interval[] = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']

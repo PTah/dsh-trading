@@ -188,7 +188,7 @@ export function createHoldingsStageTool(store: HoldingsStore, options: HoldingsW
           'JSON array of position items (also accepted as a JSON string), e.g. '
           + '[{"market":"us","symbol":"AAPL","size":10,"entryPrice":178.5,"name":"苹果","account":"富途"},...]. '
           + 'Required market/symbol/size; optional name/entryPrice/currency/account/kind/note. '
-          + 'market is crypto|us|cn|hk; symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK) with the screenshot '
+          + 'market is crypto|us|cn|hk|futures|global|ru; symbol uses connector vocabulary (AAPL / 002714.SZ / BTCUSDT / 00700.HK / SBER) with the screenshot '
           + 'display name in name; account defaults to the broker shown; simulated accounts set kind="sim" (otherwise real); currency is '
           + 'omitted and derived from market (crypto→USDT, us→USD, cn→CNY, hk→HKD); a cash balance is a row with the currency code as '
           + 'symbol and no entryPrice. Numbers come verbatim from the screenshot; omit any uncertain field.',

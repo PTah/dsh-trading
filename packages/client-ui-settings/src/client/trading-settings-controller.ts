@@ -70,6 +70,7 @@ export const PROVIDER_LABELS: readonly Readonly<ProviderMeta>[] = [
   { id: 'jin10', label: 'provider.jin10', url: 'https://mcp.jin10.com', env: 'JIN10_MCP_TOKEN', type: 'public', markets: ['global'] },
   { id: 'hithink', label: 'provider.hithink', url: 'https://fuyao.aicubes.cn', env: 'HITHINK_FINANCE_API_KEY', type: 'commercial', markets: ['cn', 'futures'] },
   { id: 'xysz', label: 'provider.xysz', url: 'https://www.chinastock.com.cn', configField: 'apiUrl', type: 'commercial', markets: ['cn'] },
+  { id: 'tbank', label: 'provider.tbank', url: 'https://developer.tbank.ru/invest/api', env: 'TBANK_TOKEN', type: 'commercial', markets: ['ru'] },
 ]
 
 /** 新闻/公告源候选（issue #96 源配置化）：id = 各 kit NewsSource 词汇；label = 词典键。 */
@@ -174,6 +175,9 @@ export const PROVIDER_CREDENTIAL_SPECS: Record<string, readonly CredentialField[
   ],
   hithink: [
     { key: 'apiKey', label: 'field.label.apiKey', placeholder: 'HITHINK_FINANCE_API_KEY', secret: true },
+  ],
+  tbank: [
+    { key: 'token', label: 'field.label.token', placeholder: 'TBANK_TOKEN', secret: true },
   ],
 }
 

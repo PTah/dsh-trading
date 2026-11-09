@@ -117,6 +117,7 @@ export type SettingsLocaleKey =
   | 'provider.hithink'
   | 'provider.jin10'
   | 'provider.xysz'
+  | 'provider.tbank'
   | 'field.label.apiKey'
   | 'field.label.secretKey'
   | 'field.label.passphrase'
@@ -247,6 +248,7 @@ export const zh: Record<SettingsLocaleKey, string> = {
       'provider.tiger': 'Tiger Trade (老虎证券)',
       'provider.hithink': '同花顺',
       'provider.jin10': '金十数据',
+      'provider.tbank': 'T-Bank Invest',
       'provider.xysz': '银河星耀数智 (AmazingData)',
       'field.label.apiKey': 'API Key',
       'field.label.secretKey': 'Secret Key',
@@ -379,6 +381,7 @@ export const en: Record<SettingsLocaleKey, string> = {
       'provider.tiger': 'Tiger Trade',
       'provider.hithink': 'HiThink',
       'provider.jin10': 'Jin10',
+      'provider.tbank': 'T-Bank Invest',
       'provider.xysz': 'China Galaxy XYSZ (AmazingData)',
       'field.label.apiKey': 'API Key',
       'field.label.secretKey': 'Secret Key',

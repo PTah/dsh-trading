@@ -60,7 +60,7 @@ export const Config: Schema<Config> = Schema.object({
  * （调大杠杆等于放大强平风险，必须先过审批）。新增同类动作时加进本模式，
  * 不要让一个实盘动作绕过审批面。
  */
-export const LIVE_ACTION_GATE_PATTERN = /^(?:(?:crypto|us|cn|hk|futures|global)_(?:place|cancel)_order|crypto_set_leverage)$/
+export const LIVE_ACTION_GATE_PATTERN = /^(?:(?:crypto|us|cn|hk|futures|global|ru)_(?:place|cancel)_order|crypto_set_leverage)$/
 
 /** 旧名（语义已扩为实盘动作集合）：新代码用 {@link LIVE_ACTION_GATE_PATTERN}。 */
 export const ORDER_GATE_PATTERN = LIVE_ACTION_GATE_PATTERN

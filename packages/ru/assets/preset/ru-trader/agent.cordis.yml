@@ -1,0 +1,56 @@
+# ru-trader agent preset —— dsh-trading ru 切片（T-Bank Invest 接入，实装形态抄
+# us-trader / crypto-trader）。
+#
+# 本文件由 @dshtrading/ru 的 dsh-trading-ru-installer 插件（bundle host 面常驻行）在
+# apply() 时幂等自安装到市场自有 preset root（默认 ~/.dsh-trading-presets/ru-trader；
+# agent-presets 行需把该 root 配进 roots，统一配置归 @dshtrading/base）。插件卸载不
+# 删除已安装目录；升级/重装后再次 apply 即恢复一致，行不可解析时只会得到带原因的
+# broken 行，无进程崩溃（S3 REPORT broken 语义）。
+#
+# 组合形态对照官方 standard preset（@deepseek-ai/dsh-agent-presets 内 standard/）：
+# - 本文件是 AGENT-PLANE 组合：roster 每个 preset 常驻挂载一次，会话按 scope 父子加入；
+#   preset 不持有审批/沙箱/模型路由（host 面职责，官方注释明确）。
+# - persona 行：@deepseek-ai/dsh-persona 的 config.text，{{model}}/{{cwd}} 由 agent 的
+#   路由与工作区解析（官方同款写法）。
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      你是一名严谨的俄罗斯 MOEX 市场交易员，由 {{model}} 模型驱动，工作目录为 {{cwd}}。
+      基于 T-Bank Invest 连接器返回的行情（ticker/K线/品种目录）做客观、量化的分析；
+      下单类操作一律默认 dry-run 模拟，liveTrading 关闭时直接拒绝实盘，未经用户明确确认
+      绝不触碰真实资金；连接器默认 env=demo（sandbox，模拟盘），切换到 env=live（生产
+      token，真实资金）前必须向用户明确核实并征得同意；涉及 T+1 结算、整手（lot）、
+      卢布（RUB）计价与汇率、休市与节假日跳空、IIS 账户规则、sandbox 与 live token
+      区分时逐项核对 ru-risk-checklist 风控清单；你给出的任何内容都不构成投资建议。
+      每次会话开始时，先检查工作目录下是否已有交易日志目录 .trading-journal/：没有则
+      提醒用户本工作区尚未建立交易日志，并调用 trading-notes-setup 技能创建骨架；已有则
+      把本会话的重要操作按 trading-notes-setup 的规范记入日志——agent 自己的操作入
+      agent 轨，用户的决定与手工操作代记入 human 轨，dry-run 一律标注。
+
+# connector 行 provide 服务（tradingRuMarketData / tradingRuTrade），按官方 standard
+# preset 的硬性规则必须包进 cordis:group + isolate（entry-local realm），且 isolate
+# 键 = 服务名：否则服务发布进 root realm，与其他 preset 冲突，dsh-agent-presets 挂载时
+# 直接拒绝。preset 面走直接 provide 入口；host 面注册表行（cordis.patch.yml 的
+# ru-dataplane-tbank）负责 GUI 行情桥，两面同挂若都用 dataplane 会触发注册表
+# (ru, tbank) 重复注册的响亮失败。
+- id: dsh-trading-ru-connector-tbank-group
+  name: cordis:group
+  group: true
+  isolate:
+    tradingRuMarketData: true
+    tradingRuTrade: true
+  config:
+    - id: dsh-trading-ru-connector-tbank
+      name: '@dshtrading/connector-tbank'
+      config:
+        enabled: true
+        env: demo
+        dryRun: true
+        liveTrading: false
+
+- id: dsh-trading-ru-kit
+  name: '@dshtrading/kit-ru'
+  config:
+    dryRun: true
+    liveTrading: false

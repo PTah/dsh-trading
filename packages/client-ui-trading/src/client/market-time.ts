@@ -16,6 +16,7 @@ export const MARKET_TIMEZONE: Record<MarketId, string | null> = {
   futures: 'Asia/Shanghai',
   // 全球品种跨时区连续交易（周一 06:00 — 周六 05:00 北京时间），不做交易日分组。
   global: null,
+  ru: 'Europe/Moscow',
 }
 
 /** 该市场的本地时区（无交易日概念的市场返回 null）。 */

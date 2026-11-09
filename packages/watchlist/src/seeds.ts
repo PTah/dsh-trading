@@ -35,6 +35,12 @@ export const WATCHLIST_SEEDS: WatchlistsMap = {
     { market: 'hk', symbol: '09988', name: '阿里巴巴-W' },
     { market: 'hk', symbol: '03690', name: '美团-W' },
   ],
+  ru: [
+    { market: 'ru', symbol: 'SBER', name: 'Сбербанк' },
+    { market: 'ru', symbol: 'GAZP', name: 'Газпром' },
+    { market: 'ru', symbol: 'LKOH', name: 'Лукойл' },
+    { market: 'ru', symbol: 'YNDX', name: 'Яндекс' },
+  ],
 }
 
 /** 单市场展示行：用户定制行优先；未定制（缺键）回落该市场种子。已定制（包括空数组）以用户定制为准。 */

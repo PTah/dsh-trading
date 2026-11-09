@@ -11,7 +11,7 @@ import { instrumentFormOf, type InstrumentAssetClass, type InstrumentForm, type 
 import { SYMBOL_CATALOG, type CatalogMarket } from './catalog.ts'
 
 /** instruments_search / routing_get 覆盖的市场（与内置字典的键同词汇）。 */
-export const MARKETS: readonly CatalogMarket[] = ['crypto', 'us', 'cn', 'hk']
+export const MARKETS: readonly CatalogMarket[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru']
 
 /** market 参数收窄：只认已登记的四市场（其余按「不过滤」处理，与既有行为一致）。 */
 function isSearchMarket(value: unknown): value is CatalogMarket {

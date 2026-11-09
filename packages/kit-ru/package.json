@@ -1,0 +1,37 @@
+{
+  "name": "@dshtrading/kit-ru",
+  "description": "Russian market toolkit plugin for dsh-trading: ru risk checklist skill provider (T+1 settlement/lot size/RUB currency/weekend gaps/IIS accounts/sandbox vs live token); runs as a ru-trader preset row (session-scoped)",
+  "version": "0.7.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "assets"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dshtrading/base": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.1.0",
+    "@deepseek-ai/dsh-skill": ">=0.2.2-rc.1",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1",
+    "@deepseek-ai/schemastery": ">=3.19.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
+  }
+}

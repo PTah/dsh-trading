@@ -42,6 +42,8 @@ export const MARKET_INDICES: Record<MarketId, MarketIndexDef[]> = {
     { symbol: 'USOIL', nameKey: 'index.wtiOil' },
     { symbol: 'SPX', nameKey: 'index.sp500' },
   ],
+  // 俄股：无单独大盘指数页签种子（IMOEX 等可通过自选添加）。
+  ru: [],
 }
 
 export interface MarketSessionInfo {

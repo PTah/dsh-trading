@@ -42,6 +42,7 @@ export const FAMILIES: Readonly<Record<string, FamilyMeta>> = {
   crypto: { label: '加密行情与账户', whenToUse: '查币种报价/K 线/资金费率/衍生品指标，或加密账户余额与下单' },
   futures: { label: '期货行情与账户', whenToUse: '查期货报价/K 线，或期货账户余额' },
   global: { label: '全球品种（金十）', whenToUse: '现货贵金属/原油/外汇/全球指数的报价与分钟线，代码先用 instruments 解析' },
+  ru: { label: '俄股 / T-Bank', whenToUse: '查 MOEX 报价/K 线，或 T-Bank 账户余额与持仓' },
   instruments: { label: '标的检索', whenToUse: '跨市场按代码或名称模糊找标的，得到规范 symbol 后再调行情工具' },
   watchlist: { label: '自选股', whenToUse: '增删改查用户自选行与分组，或在 GUI 中栏切换当前标的' },
   holdings: { label: '统一资产台账', whenToUse: '任何涉及持仓、仓位、敞口、复盘的任务——先读台账再谈别的' },

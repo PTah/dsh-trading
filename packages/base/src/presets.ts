@@ -14,7 +14,7 @@ export const name = 'dsh-trading-role-presets'
 export const inject = ['loader', 'agentPresets']
 export interface Config {}
 export const Config: Schema<Config> = Schema.object({})
-export const MARKETS = ['crypto', 'us', 'cn', 'hk', 'futures', 'global'] as const
+export const MARKETS = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'] as const
 export type Market = typeof MARKETS[number]
 /** 角色 preset id（名册的四条主线）；委派专用 preset 由 DELEGATE_PRESETS 派生。 */
 export const PRESET_IDS = ['trader', 'instrument-researcher', 'risk-reviewer', 'master'] as const

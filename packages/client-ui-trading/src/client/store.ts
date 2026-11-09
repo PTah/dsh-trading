@@ -99,7 +99,7 @@ export function inferMarket(symbol?: string): MarketId {
 /** 选中标的清洗：市场词汇校验（非法/缺失 → 按 symbol 回推），可选字段缺省不落键。 */
 function sanitizeInstrument(instrument: Instrument): Instrument {
   return {
-    market: instrument.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(instrument.market) ? instrument.market : inferMarket(instrument.symbol),
+    market: instrument.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'].includes(instrument.market) ? instrument.market : inferMarket(instrument.symbol),
     symbol: instrument.symbol,
     ...(instrument.name ? { name: instrument.name } : {}),
     ...(instrument.form !== undefined ? { form: instrument.form } : {}),
@@ -159,12 +159,12 @@ export function sameInstrument(a: Instrument, b: Instrument): boolean {
 function sanitizeWatchlists(raw: Watchlists): Watchlists {
   const clean: Watchlists = {}
   for (const [key, rows] of Object.entries(raw)) {
-    if (!['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(key) || !Array.isArray(rows)) continue
+    if (!['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'].includes(key) || !Array.isArray(rows)) continue
     const market = key as MarketId
     clean[market] = rows
       .filter((row): row is Instrument => Boolean(row && typeof row.symbol === 'string' && row.symbol))
       .map(row => ({
-        market: row.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(row.market) ? row.market : market,
+        market: row.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'].includes(row.market) ? row.market : market,
         symbol: row.symbol,
         ...(row.name ? { name: row.name } : {}),
         // 形态/资产类别（2026-10-08 加密永续）：可选元数据原样保真
@@ -206,7 +206,7 @@ export function createWatchlistStore(): WatchlistStore {
       return Array.isArray(rows)
     },
     add(market, instrument) {
-      const targetMarket = ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(market) ? market : inferMarket(instrument.symbol)
+      const targetMarket = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'].includes(market) ? market : inferMarket(instrument.symbol)
       const sanitized: Instrument = {
         market: targetMarket,
         symbol: instrument.symbol,
@@ -224,7 +224,7 @@ export function createWatchlistStore(): WatchlistStore {
       persist()
     },
     remove(market, symbol) {
-      const targetMarket = ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(market) ? market : inferMarket(symbol)
+      const targetMarket = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'].includes(market) ? market : inferMarket(symbol)
       store.update((current) => {
         const existing = current[targetMarket]
         const baseRows = Array.isArray(existing) ? existing : (DEFAULT_WATCHLISTS[targetMarket] ?? [])
@@ -440,6 +440,7 @@ export const MARKET_INTERVALS: Record<MarketId, string[]> = {
   // （见 connector-jin10 market-data.ts）——只上这些周期能诚实支撑的粒度，不上日线
   // 冒充历史。
   global: ['1m', '5m', '15m'],
+  ru: ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M'],
 }
 
 // ---------------------------------------------------------------------------

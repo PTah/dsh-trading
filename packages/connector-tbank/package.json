@@ -1,0 +1,40 @@
+{
+  "name": "@dshtrading/connector-tbank",
+  "description": "Russian MOEX (ru) market connector via T-Bank Invest API REST proxy: quotes, candles, order book, portfolio, gated place/cancel with sandbox/live hosts and BYOK token.",
+  "version": "0.7.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./dataplane": {
+      "types": "./lib/dataplane.d.ts",
+      "default": "./lib/dataplane.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dshtrading/authority": "workspace:^",
+    "@dshtrading/api": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.1.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.2-rc.1",
+    "@deepseek-ai/schemastery": ">=3.19.0"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "vitest": "^3.0.0"
+  }
+}

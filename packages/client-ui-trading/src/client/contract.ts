@@ -17,6 +17,7 @@ export type MarketLocaleKey =
   | 'tab.hk'
   | 'tab.futures'
   | 'tab.global'
+  | 'tab.ru'
   | 'index.spotGold'
   | 'index.wtiOil'
   | 'sidebar.addPlaceholder'

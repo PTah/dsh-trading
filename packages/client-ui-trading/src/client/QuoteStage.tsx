@@ -170,11 +170,11 @@ function inferMarketFromSymbol(symbol?: string): MarketId | undefined {
 }
 
 /** 信号 reason 的币种符号（按市场；crypto 以 USD 计价近似）。 */
-const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$', futures: '¥', global: '$' }
+const CURRENCY_SYMBOL: Record<MarketId, string> = { cn: '¥', hk: 'HK$', us: '$', crypto: '$', futures: '¥', global: '$', ru: '₽' }
 
 export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndicatorParams, setIndicatorVisible, setIndicatorScope, removeIndicator, deleteIndicator, guiSessionId }: QuoteStageProps) {
   const instrument = useSelection(value => value.instrument)
-  const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global'].includes(instrument.market))
+  const market: MarketId | undefined = (instrument?.market && ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'].includes(instrument.market))
     ? (instrument.market as MarketId)
     : inferMarketFromSymbol(instrument?.symbol)
   const symbol = instrument?.symbol
@@ -2048,4 +2048,5 @@ const TAB_KEY: Record<MarketId, MarketLocaleKey> = {
   hk: 'tab.hk',
   futures: 'tab.futures',
   global: 'tab.global',
+  ru: 'tab.ru',
 }

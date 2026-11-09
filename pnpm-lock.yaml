@@ -1292,6 +1292,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
 
+  packages/connector-tbank:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+      '@deepseek-ai/dsh-tools':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(71e9b8099add9aaf7bb42662f07c41a3)
+      '@deepseek-ai/schemastery':
+        specifier: 3.19.0
+        version: 3.19.0
+      '@dshtrading/api':
+        specifier: workspace:^
+        version: link:../api
+      '@dshtrading/authority':
+        specifier: workspace:^
+        version: link:../authority
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+
   packages/connector-template:
     dependencies:
       '@deepseek-ai/cordis':
@@ -1850,6 +1875,31 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
 
+  packages/kit-ru:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+      '@deepseek-ai/dsh-skill':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(@deepseek-ai/cordis@4.1.0)(@deepseek-ai/dsh-llm@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))(@deepseek-ai/dsh-scope@0.2.2-rc.1(@deepseek-ai/cordis@4.1.0))
+      '@deepseek-ai/dsh-tools':
+        specifier: 0.2.2-rc.1
+        version: 0.2.2-rc.1(71e9b8099add9aaf7bb42662f07c41a3)
+      '@deepseek-ai/schemastery':
+        specifier: 3.19.0
+        version: 3.19.0
+      '@dshtrading/base':
+        specifier: workspace:*
+        version: link:../base
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+
   packages/kit-us:
     dependencies:
       '@deepseek-ai/cordis':
@@ -1939,6 +1989,25 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.19.0)(jsdom@30.1.1)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+
+  packages/ru:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.1.0
+        version: 4.1.0(@deepseek-ai/cordis-plugin-include@1.1.0)(@deepseek-ai/cordis-plugin-loader@1.1.0)
+      '@deepseek-ai/schemastery':
+        specifier: 3.19.0
+        version: 3.19.0
+      '@dshtrading/connector-tbank':
+        specifier: workspace:*
+        version: link:../connector-tbank
+      '@dshtrading/kit-ru':
+        specifier: workspace:*
+        version: link:../kit-ru
+    devDependencies:
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(tsx@4.23.15)(typescript@5.9.3)
 
   packages/strategies:
     dependencies:

@@ -79,6 +79,7 @@ const MARKET_LABEL_KEY: Record<MarketId, MarketLocaleKey> = {
   hk: 'tab.hk',
   futures: 'tab.futures',
   global: 'tab.global',
+  ru: 'tab.ru',
 }
 
 /** Tab 条短标签（会话列宽度约束下的紧凑文案）。 */
@@ -193,7 +194,7 @@ function HoldingDraftFields({ t, draft, onChange }: {
       <label className={css.formField}>
         <span>{t('trade.holdings.field.market')}</span>
         <select value={draft.market} onChange={(e) => onChange({ ...draft, market: e.target.value as HoldingMarket })}>
-          {(['crypto', 'us', 'cn', 'hk'] as const).map(m => (
+          {(['crypto', 'us', 'cn', 'hk', 'ru'] as const).map(m => (
             <option key={m} value={m}>{t(MARKET_LABEL_KEY[m])}</option>
           ))}
         </select>

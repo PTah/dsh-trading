@@ -185,7 +185,7 @@ export function MarketSidebar({
 
   // 动态标的全集预取（Issue #15）：切页签或挂载时触发，成功后注入 catalog 并刷新联想
   useEffect(() => {
-    const targetMarkets: MarketId[] = tab === 'watch' ? ['crypto', 'us', 'cn', 'hk', 'futures', 'global'] : [tab]
+    const targetMarkets: MarketId[] = tab === 'watch' ? ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'] : [tab]
     let cancelled = false
     for (const m of targetMarkets) {
       fetchSymbols(m)
@@ -300,7 +300,7 @@ export function MarketSidebar({
 
     let cancelled = false
     const timer = setTimeout(() => {
-      const targetMarkets: MarketId[] = tab === 'watch' ? ['cn', 'hk', 'us', 'crypto', 'futures', 'global'] : [tab]
+      const targetMarkets: MarketId[] = tab === 'watch' ? ['cn', 'hk', 'us', 'crypto', 'futures', 'global', 'ru'] : [tab]
       for (const m of targetMarkets) {
         fetchSymbols(m, raw)
           .then((items) => {
@@ -767,7 +767,7 @@ export function MarketSidebar({
                   className={css.addMarketToggle}
                   title={t('sidebar.addMarketHint')}
                   onClick={() => {
-                    const order: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global']
+                    const order: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru']
                     const index = order.indexOf(addMarket)
                     setAddMarket(order[(index + 1) % order.length] ?? 'crypto')
                   }}

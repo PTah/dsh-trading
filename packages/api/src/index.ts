@@ -979,6 +979,10 @@ declare module '@deepseek-ai/cordis' {
     tradingFuturesMarketData: MarketDataService
     /** 全球品种行情（global 市场：大宗/外汇/海外指数；@dshtrading/connector-jin10 dataplane 行提供）。 */
     tradingGlobalMarketData: MarketDataService
+    /** ru 市场行情服务（T-Bank Invest REST；MOEX 股票/ETF 等）。 */
+    tradingRuMarketData: MarketDataService
+    /** ru 市场交易服务（T-Bank Invest OrdersService；sandbox/live host + dry-run 闸门）。 */
+    tradingRuTrade: TradeService
     /**
      * crypto 市场交易服务（R3 2026-08-29 补齐，crypto 市场第一个真实 TradeService）：
      * 由 connector-okx 实现（签名 demo/live 下单），与 connector-binance 经
