@@ -83,10 +83,14 @@ nsis:
   allowToChangeInstallationDirectory: true
   allowElevation: true
   shortcutName: DSH Trading
+  # Default English; Russian/Chinese Windows pick matching catalogs when present.
+  # Forced zh_CN (2052) made the wizard Chinese while MessageBox buttons followed
+  # the OS language — unreadable for non-Chinese users (2026-11-09).
   installerLanguages:
-    - zh_CN
     - en_US
-  language: 2052
+    - ru_RU
+    - zh_CN
+  language: 1033
   # 纯文件名：getResource 按 buildResourcesDir 主路径命中 desktop/resources/installer.nsh。
   # 旧值 resources/installer.nsh 主路径必失（会拼出 resources/resources/），
   # 一直靠 app-builder-lib 的 projectDir 回退侥幸命中（2026-09-06 整改）。

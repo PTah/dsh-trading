@@ -12,11 +12,11 @@ Status: implemented
 
 ## Decision
 
-- **自定义安装向导与路径选择**：在 [`desktop/electron-builder.yml`](../../desktop/electron-builder.yml) 中配置 `oneClick: false`、`allowToChangeInstallationDirectory: true`、`allowElevation: true`，开启支持中英双语（`language: 2052`）的 NSIS 多步安装向导，支持用户自选安装路径。
+- **自定义安装向导与路径选择**：在 [`desktop/electron-builder.yml`](../../desktop/electron-builder.yml) 中配置 `oneClick: false`、`allowToChangeInstallationDirectory: true`、`allowElevation: true`，开启 NSIS 多步安装向导，支持用户自选安装路径。语言目录为 `en_US` / `ru_RU` / `zh_CN`，默认 `language: 1033`（英文；2026-11-09 从前强制 `zh_CN`/2052 改为系统可选，避免俄文系统上向导中文、按钮俄文的错配）。
 - **VC++ 运行库静默集成与 64 位注册表检测**：
   - 新增 [`desktop/scripts/fetch-redist.mjs`](../../desktop/scripts/fetch-redist.mjs)，在构建准备阶段自动从微软官方直链拉取 `vc_redist.x64.exe` 存入 `desktop/resources/redist/`。
   - 新增 [`desktop/resources/installer.nsh`](../../desktop/resources/installer.nsh)，在 `customInstall` 阶段使用 `SetRegView 64` 检测注册表 `HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\X64` 的 `Installed` 键值。若未安装，将捆绑的 `vc_redist.x64.exe` 释放并静默执行 `/install /quiet /norestart`。
-- **卸载弹窗询问清除数据**：在 `installer.nsh` 的 `customUnInstall` 钩子中，使用 `MessageBox MB_ICONQUESTION|MB_YESNO` 弹窗询问用户是否同时清理 `~/.dsh` 和应用配置缓存，用户确认后递归清理，取消则完整保留。
+- **卸载弹窗询问清除数据**：在 `installer.nsh` 的 `customUnInstall` 钩子中，按 `$LANGUAGE`（1049=ru / 2052=zh-CN / 其余=en）弹出 `MessageBox`，询问是否清理 `~/.dsh-trading` 与本地缓存（**永不触碰** `~/.dsh`）；默认按钮与静默 `/SD` 均为「否」。Mygo 同款文案在 `mygo/installer/windows.nsh`。
 - **服务 Host 运行与崩溃诊断加固**：
   - 在 [`desktop/src/runtime.cjs`](../../desktop/src/runtime.cjs) 中新增 `formatHostExitDiagnostic` 纯函数，精准识别退出码 `3221225781` / `-1073741515`（`0xC0000135: STATUS_DLL_NOT_FOUND`），并生成友好易懂的诊断信息。
   - 在 [`desktop/src/main.cjs`](../../desktop/src/main.cjs) 中同步 Windows `env.PATH` 与 `env.Path`，避免系统目录丢失；增加 `child.on('error')` 防止进程派生异常引起主进程未捕获异常。

@@ -208,7 +208,23 @@
 ; nobody sees, and it must not delete what the user did not agree to.
 !macro customUnInstall
   IfSilent keep_user_data
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否同时清除用户交易数据与配置目录？$\r$\n$\r$\n【是】删除 ~/.dsh-trading（交易数据、会话、profile）与 DSH Trading Mygo 的应用数据$\r$\n【否】保留这些数据，重装后可继续使用$\r$\n$\r$\n（不会删除 ~/.dsh：那是 dsh 宿主与 CLI 的共享 home）" /SD IDNO IDNO keep_user_data
+  ; $LANGUAGE: 1049=ru, 2052=zh-CN, else English. Same question as Electron installer.nsh.
+  StrCmp $LANGUAGE 1049 mygo_uninstall_ask_ru
+  StrCmp $LANGUAGE 2052 mygo_uninstall_ask_zh
+  Goto mygo_uninstall_ask_en
+
+  mygo_uninstall_ask_ru:
+    MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Также удалить пользовательские торговые данные и настройки?$\r$\n$\r$\n[Да] Удалить ~/.dsh-trading (торговые данные, сеансы, profile) и данные приложения DSH Trading Mygo$\r$\n[Нет] Сохранить данные — после переустановки всё останется$\r$\n$\r$\n(~/.dsh не удаляется: это общий home хоста dsh и CLI)" /SD IDNO IDNO keep_user_data
+    Goto mygo_uninstall_clean
+
+  mygo_uninstall_ask_zh:
+    MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "是否同时清除用户交易数据与配置目录？$\r$\n$\r$\n【是】删除 ~/.dsh-trading（交易数据、会话、profile）与 DSH Trading Mygo 的应用数据$\r$\n【否】保留这些数据，重装后可继续使用$\r$\n$\r$\n（不会删除 ~/.dsh：那是 dsh 宿主与 CLI 的共享 home）" /SD IDNO IDNO keep_user_data
+    Goto mygo_uninstall_clean
+
+  mygo_uninstall_ask_en:
+    MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Also remove user trading data and settings?$\r$\n$\r$\n[Yes] Delete ~/.dsh-trading (trading data, sessions, profile) and DSH Trading Mygo app data$\r$\n[No] Keep this data for reinstall$\r$\n$\r$\n(~/.dsh is never removed: it is the shared home of the dsh host and CLI)" /SD IDNO IDNO keep_user_data
+
+  mygo_uninstall_clean:
   DetailPrint "Removing ~/.dsh-trading and the app's data..."
   RMDir /r "$PROFILE\.dsh-trading"
   RMDir /r "$APPDATA\DSH Trading Mygo"
