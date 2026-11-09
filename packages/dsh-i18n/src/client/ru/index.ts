@@ -1,0 +1,5 @@
+export { ru as settingsRu } from './settings.ts'
+export { ru as marketRu } from './market.ts'
+export { ru as strategiesRu } from './strategies.ts'
+export { ru as knowledgeRu } from './knowledge.ts'
+export { ru as updaterRu } from './updater.ts'

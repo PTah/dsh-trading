@@ -16,11 +16,13 @@ zh 改 en 漏改无法机器发现。
 1. **中心化语言包插件 `packages/dsh-i18n`**（范式对标 dsh-web 同名包）：
    宿主半 no-op；浏览器半 `ctx.locale.addLanguage({ id: 'zh-CN', label: '简体中文',
    fallback: 'zh' })` + 逐命名空间 untyped `register(ns, 'zh-CN', dict)`。
-   宿主内置 zh/en 由源包持有，本包只承载**额外语言**（后续加 ru/de = import
-   词典模块 + PACKAGES/LANGUAGES 各一行）。词典构建期直接 import 各源包
+   宿主内置 zh/en 由源包持有，本包只承载**额外语言**。词典构建期直接 import 各源包
    `src/client/locales.ts`——**zh-CN ≡ zh 零拷贝零漂移**，这是与 dsh-web ru 包
    手抄词典的最大差异（那边靠 audit 查漂移，这边结构性消除漂移）。
    base/cordis.patch.yml insert 行 `dsh-trading-dsh-i18n`（铁律 #1，共享行 base 拥有）。
+   **2026-11-09**：补 `ru`——宿主已有语言目录项 `ru`（fallback en），本包在
+   `src/client/ru/*` 手持 `dshtrading.*` 俄语词典经 `LOCALE_PACKAGES` 注册；不再
+   `addLanguage('ru')`。宿主选 Русский 时交易 GUI 不再回落到 en/zh 原文。
 2. **词典抽离 `src/client/locales.ts` 纯数据模块 + `./locales` exports 子路径**：
    4 个 UI 包的词典从 `client/index.ts` 函数体抽为独立模块（typed register 编译期
    键位校验保留），node 半 tsdown entry 加 `src/client/locales.ts`，产物

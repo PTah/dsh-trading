@@ -51,6 +51,7 @@ const MARKET_TABS: readonly { id: string; order: number; key: string }[] = [
   { id: 'hk', order: 3, key: 'hk' },
   { id: 'futures', order: 4, key: 'futures' },
   { id: 'global', order: 5, key: 'global' },
+  { id: 'ru', order: 6, key: 'ru' },
 ]
 
 /** 注册『交易』设置一级菜单（tab 容器）+ 每市场面板。 */

@@ -12,7 +12,8 @@ Status: implemented
 
 - `@dshtrading/connector-tbank`：REST/Swagger 代理（`invest-public-api.tinkoff.ru/rest` / sandbox host），Bearer token（`TBANK_TOKEN` / `TBANK_DEMO_TOKEN`），工具前缀 `ru_*`，quantity 为股数、按 lot 向下取整为手数。
 - `@dshtrading/kit-ru` + `@dshtrading/ru`：risk checklist + preset `ru-trader` + host dataplane 注册 `(ru, tbank)`。
-- base 闸门扩为含 `ru_(place|cancel)_order`；router `DEFAULT_MARKETS.ru = tbank`；设置页 `PROVIDER_LABELS` / 凭据卡 `token`；desktop profile 依赖与 bundle 列表纳入 `@dshtrading/ru`。
+- base 闸门扩为含 `ru_(place|cancel)_order`；router `DEFAULT_MARKETS.ru = tbank`；设置页 `MARKET_TABS` 含 `ru`（词典 `market.ru`）+ `PROVIDER_LABELS` / 凭据卡 `token`；desktop profile 依赖与 bundle 列表纳入 `@dshtrading/ru`。
+- 设置页市场 tab 不是从已装 bundle 动态推断：漏写 `MARKET_TABS` 时 Settings→Trading 只显示旧六市，即使用户 profile 已装 `@dshtrading/ru`。
 
 协议取舍：官方主协议是 gRPC，本仓连接器一律走已公开的 REST 代理（与 Alpaca/Longbridge 同构的 `fetch` 管线，零原生 gRPC 依赖）。沙箱用独立 host，不走 `SandboxService` 专用方法名（与官方「优先 sandbox host」建议一致）。
 
