@@ -23,11 +23,18 @@ const { parseShasums } = require('../src/runtime.cjs');
 const DEFAULT_NODE_VERSION = 'v24.20.0';
 // distOs is Node's own archive naming (win, not win32); the staged
 // directory keeps the Electron ${os}-${arch} naming for extraResources.
-const TARGETS = [
+const ALL_TARGETS = [
   { os: 'darwin', cpu: 'arm64', ext: 'tar.gz', distOs: 'darwin' },
   { os: 'darwin', cpu: 'x64', ext: 'tar.gz', distOs: 'darwin' },
   { os: 'win32', cpu: 'x64', ext: 'zip', distOs: 'win' },
 ];
+// Windows bsdtar cannot materialize the relative symlinks inside the official
+// darwin Node tarballs (corepack/npm/npx). Local Windows builders and CI
+// windows-latest only need the host target; set DSH_FETCH_NODE_ALL=1 to force
+// the full matrix (macOS release hosts still fetch every target by default).
+const TARGETS = process.env.DSH_FETCH_NODE_ALL === '1' || process.platform !== 'win32'
+  ? ALL_TARGETS
+  : ALL_TARGETS.filter((t) => t.os === 'win32' && t.cpu === 'x64');
 
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outRoot = path.join(desktopDir, 'resources', 'runtime');
