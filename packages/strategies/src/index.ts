@@ -20,6 +20,21 @@ export type {
 } from './types.ts'
 
 export { run } from './engine.ts'
+export {
+  BOT_ADD_BAND,
+  BOT_FAST,
+  BOT_MAX_NEW_BUYS,
+  BOT_SLOW,
+  applyBotFill,
+  botTicker,
+  botTradableShare,
+  decideBotBook,
+  type BotAction,
+  type BotCandidate,
+  type BotKind,
+  type BotPosition,
+  type BotReason,
+} from './bot.ts'
 
 // 标的价格显示小数位（自适应 2→3 位）：client-ui 两包经此复用同一规则，
 // 替代各处内联 toFixed(2) 对 3 位小数标的（港股 0.001 tick）的截断。

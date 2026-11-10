@@ -37,9 +37,10 @@ import { stanceOf } from './signal-brief.ts'
 import { advise, type InvestorAction } from './investor-advice.ts'
 import { adjustBondAdvice, bondAciIsMaterial, type BondQuote } from './bond-advice.ts'
 export { strategyName, strategySummary, paramLabel, exitReasonText } from './strategy-locale.ts'
+import { BotPane } from './BotPane.tsx'
 import css from './StrategyView.module.css'
 
-type StrategySection = 'screener' | 'quant' | 'insight'
+type StrategySection = 'screener' | 'quant' | 'insight' | 'bot'
 
 const INSIGHT_ACTION: Record<InvestorAction, StrategyLocaleKey> = {
   buy: 'sv.insight.action.buy',
@@ -102,6 +103,7 @@ export interface StrategyViewProps {
     fetchCustomStrategies: () => Promise<Array<{ id: string; title: string; horizon: string; summary: string; paramsJson: string; computeSource: string }>>
     fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string }>>
     fetchTickers?: (market: string, symbols: string[]) => Promise<Record<string, { ok?: boolean; ticker?: { bond?: BondQuote } }>>
+    placeBotDryRunOrder?: (input: { symbol: string; side: 'buy' | 'sell'; quantity: number }) => Promise<{ order?: unknown; error?: string }>
     subscribeTradingEvents: (handlers: { strategies?: () => void }) => () => void
     saveCustomStrategy?: ((input: StrategyEditorSaveInput) => Promise<{ ok: true } | { ok: false; reason: string } | null>) | undefined
     deleteCustomStrategy?: ((id: string) => Promise<boolean>) | undefined
@@ -124,7 +126,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   // section 白名单：旧存档缺省 quant；手改出的脏值回落 quant，避免渲染出
   // 「头部选择器隐藏但量化内容还在」的半套 UI
   const [section, setSection] = useState<StrategySection>(
-    stored.section === 'screener' || stored.section === 'insight' ? stored.section : 'quant',
+    stored.section === 'screener' || stored.section === 'insight' || stored.section === 'bot' ? stored.section : 'quant',
   )
   const [horizon, setHorizon] = useState<StrategyHorizon>(stored.horizon ?? 'short')
   const [selectedId, setSelectedId] = useState<string>(stored.strategyId ?? 'donchian-breakout')
@@ -546,7 +548,16 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
           >
             {t('sv.section.insight')}
           </button>
+          <button
+            type="button"
+            className={css.horizonBtn}
+            data-active={section === 'bot' ? 'true' : undefined}
+            onClick={() => setSection('bot')}
+          >
+            {t('sv.section.bot')}
+          </button>
         </div>
+        {section === 'bot' && <BotPane t={t} bridge={stableBridge} />}
 
         {section === 'quant' && (
           <>

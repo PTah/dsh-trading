@@ -244,6 +244,36 @@ export async function placeGuiOrder(market: MarketId, input: GuiOrderInput, cont
   }
 }
 
+/**
+ * Учебная заявка робота. dryRun всегда true: живой путь и подтверждение сюда не входят.
+ * Количество — число лотов, сторона buy или sell, тип market.
+ */
+export async function placeBotDryRunOrder(
+  market: MarketId,
+  input: { symbol: string; side: 'buy' | 'sell'; quantity: number },
+): Promise<GuiOrderResult> {
+  try {
+    const response = await fetch(`/dshtrading/api/trade/order?market=${market}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        symbol: input.symbol,
+        side: input.side,
+        type: 'market',
+        quantity: input.quantity,
+        dryRun: true,
+      }),
+    })
+    const wire = await response.json().catch(() => ({})) as { ok?: boolean; order?: Order; code?: string; message?: string }
+    if (!response.ok || wire.ok !== true || wire.order === undefined) {
+      return { error: wire.message || wire.code || 'dry-run rejected' }
+    }
+    return { order: wire.order }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Network request failed' }
+  }
+}
+
 /** 兼容别名（历史命名；同样走实盘 + 审批路径，必须带提交身份）。 */
 export async function placeGuiDryRunOrder(market: MarketId, input: GuiOrderInput, context: GuiOrderApprovalContext): Promise<Order | null> {
   const res = await placeGuiOrder(market, input, context)
@@ -294,6 +324,36 @@ export async function cancelGuiOrder(
  * 客户端据此渲染形态徽标与 TradFi 归属——**不按符号猜资产类别**。
  */
 export type SymbolInfo = { symbol: string; name?: string; form?: InstrumentForm; assetClass?: InstrumentAssetClass; listing?: InstrumentListing }
+
+export interface RuLeaderRow {
+  symbol: string
+  name: string
+  role: 'leader' | 'growing' | 'outsider'
+  rank: number
+  previousRank: number | null
+  weeksInTop: number
+  label: 'stable' | 'holding' | 'rising' | 'new' | 'outsider'
+}
+
+export interface RuLeadersPayload {
+  universe: 'imoex' | 'rgbi'
+  scanned: number
+  missing: number
+  topN: number
+  rows: RuLeaderRow[]
+}
+
+const leaderCache = new Map<'imoex' | 'rgbi', { at: number; payload: RuLeadersPayload }>()
+const LEADER_CACHE_MS = 4 * 60 * 60 * 1000
+
+/** Роли внутри IMOEX или RGBI. Повторный заход в «Россию» в течение нескольких часов не пересчитывает свечи. */
+export async function fetchRuLeaders(universe: 'imoex' | 'rgbi'): Promise<RuLeadersPayload> {
+  const cached = leaderCache.get(universe)
+  if (cached !== undefined && Date.now() - cached.at < LEADER_CACHE_MS) return cached.payload
+  const payload = await getJson<RuLeadersPayload>(`/dshtrading/api/ru-leaders?universe=${universe}`)
+  leaderCache.set(universe, { at: Date.now(), payload })
+  return payload
+}
 
 export async function fetchSymbols(market: MarketId, q?: string): Promise<SymbolInfo[]> {
   const query = new URLSearchParams({ market, ...(q ? { query: q } : {}) })
@@ -484,6 +544,18 @@ export interface ClientNewsResult {
  * 标的新闻（issue #37）。Kit 未注册或会话不活跃 → null：面板显示空态提示。
  * 只返回与标的相关的条目；无相关内容即空列表，无市场要闻兜底。
  */
+export interface NewsArticleText {
+  title: string
+  sourceHost: string
+  paragraphs: string[]
+}
+
+/** Текст выбранной новости. Мост читает страницу издателя, окно браузера не открывается. */
+export async function fetchNewsArticle(url: string, signal?: AbortSignal): Promise<NewsArticleText> {
+  const query = new URLSearchParams({ url })
+  return getJson<NewsArticleText>(`/dshtrading/api/news/article?${query.toString()}`, signal)
+}
+
 export async function fetchNews(market: MarketId, symbol?: string, limit = 20, signal?: AbortSignal): Promise<ClientNewsResult | null> {
   try {
     const query = new URLSearchParams({ market, ...(symbol ? { symbol } : {}), limit: String(limit) })
@@ -1495,6 +1567,7 @@ export interface TradingBridgeService {
   fetchSymbols: typeof fetchSymbols
   fetchTickers: typeof fetchTickers
   subscribeTradingEvents: typeof subscribeTradingEvents
+  placeBotDryRunOrder: typeof placeBotDryRunOrder
 }
 
 /** 服务装配（shell apply 时以本模块函数 provide，零转发成本）。 */
@@ -1518,5 +1591,6 @@ export function createTradingBridgeService(): TradingBridgeService {
     fetchSymbols,
     fetchTickers,
     subscribeTradingEvents,
+    placeBotDryRunOrder,
   }
 }
