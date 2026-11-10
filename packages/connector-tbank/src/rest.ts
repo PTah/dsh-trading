@@ -488,6 +488,27 @@ export class TBankRestClient {
     return instrument
   }
 
+  private async nextCouponPay(instrumentId: string, credentials: TBankCredentials): Promise<number | undefined> {
+    if (instrumentId === '') return undefined
+    try {
+      const data = await this.request(
+        'InstrumentsService',
+        'GetBondCoupons',
+        {
+          instrumentId,
+          from: new Date().toISOString(),
+          to: new Date(Date.now() + 20 * 365 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        credentials,
+      )
+      const events = Array.isArray(data.events) ? data.events as JsonRecord[] : []
+      const pay = quotationToNumber(events[0]?.payOneBond)
+      return pay > 0 ? pay : undefined
+    } catch {
+      return undefined
+    }
+  }
+
   async getTicker(symbol: string, credentials: TBankCredentials): Promise<Ticker> {
     let instrument = await this.resolveInstrument(symbol, credentials)
     const [last, book] = await Promise.all([
@@ -533,7 +554,16 @@ export class TBankRestClient {
         const nominal = quotationToNumber(inst.nominal)
         const aci = quotationToNumber(inst.aciValue)
         bond = bondQuoteFromParts(lastPrice, nominal, aci)
+        const couponPay = await this.nextCouponPay(instrument.uid || instrument.figi, credentials)
         const bondFacts = readInstrumentFacts(inst)
+        if (bond !== undefined) {
+          bond = {
+            ...bond,
+            ...(couponPay === undefined ? {} : { couponPay }),
+            ...(bondFacts.maturity !== undefined ? { maturity: bondFacts.maturity } : {}),
+            ...(bondFacts.couponsPerYear !== undefined ? { couponsPerYear: bondFacts.couponsPerYear } : {}),
+          }
+        }
         if (bondFacts.maturity !== undefined) instrument = { ...instrument, maturity: bondFacts.maturity }
         if (bondFacts.couponsPerYear !== undefined) instrument = { ...instrument, couponsPerYear: bondFacts.couponsPerYear }
         if (typeof inst.name === 'string' && inst.name.trim() !== '') instrument = { ...instrument, name: inst.name.trim() }

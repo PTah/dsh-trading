@@ -3,27 +3,38 @@
  * Проверка читает дневные свечи первых акций из списка «Россия».
  * Учебная заявка всегда dry-run. Книга лежит отдельно от избранного.
  */
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   applyBotFill,
-  botTradableShare,
-  decideBotBook,
   moexEquitySession,
-  type BotAction,
+  moexNextTradingOpen,
   type BotKind,
   type BotPosition,
   type BotReason,
+  type BotReview,
+  type BotVerdict,
   type MoexSession,
 } from '@dshtrading/strategies'
+import { robotSession, type BondLadder } from './robot-session.ts'
 import { readJson, writeJson } from './shell-faces.ts'
 import type { StrategyLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
 
 const BOOK_KEY = 'dshtrading.bot.book.v1'
-const SCAN_LIMIT = 30
-const CONCURRENCY = 4
 
-type Translate = (key: StrategyLocaleKey) => string
+type Translate = (key: StrategyLocaleKey, params?: Record<string, unknown>) => string
+
+function waitUntilOpen(t: Translate, now: number): { wait: string; local: string } {
+  const openAt = moexNextTradingOpen(now)
+  const local = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(openAt)
+  const total = Math.ceil((openAt.getTime() - now) / 60_000)
+  if (total <= 0) return { wait: t('sv.bot.waitSoon'), local }
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  if (hours === 0) return { wait: t('sv.bot.waitMinutes', { minutes: String(minutes) }), local }
+  if (minutes === 0) return { wait: t('sv.bot.waitHoursOnly', { hours: String(hours) }), local }
+  return { wait: t('sv.bot.waitHours', { hours: String(hours), minutes: String(minutes) }), local }
+}
 
 interface KlineWire {
   openTime: number
@@ -36,7 +47,11 @@ interface KlineWire {
 
 export interface BotPaneBridge {
   fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<KlineWire[]>
-  fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string }>>
+  fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string; listing?: string }>>
+  fetchTickers?: (market: string, symbols: string[]) => Promise<Record<string, {
+    ok?: boolean
+    ticker?: { bond?: { nominal: number; aci: number; pricePercent: number; clean: number; dirty: number; couponPay?: number; maturity?: string; couponsPerYear?: number } }
+  }>>
   placeBotDryRunOrder?: (input: { symbol: string; side: 'buy' | 'sell'; quantity: number }) => Promise<{ order?: unknown; error?: string }>
 }
 
@@ -60,29 +75,85 @@ const REASON_KEY: Record<BotReason, StrategyLocaleKey> = {
   hold: 'sv.bot.reason.hold',
 }
 
+const VERDICT_KEY: Record<Exclude<BotVerdict, BotKind>, { title: StrategyLocaleKey; detail: StrategyLocaleKey }> = {
+  'no-cross': { title: 'sv.bot.skip', detail: 'sv.bot.verdict.no-cross' },
+  'short-history': { title: 'sv.bot.shortLabel', detail: 'sv.bot.verdict.short-history' },
+  'no-bars': { title: 'sv.bot.unreadLabel', detail: 'sv.bot.verdict.no-bars' },
+  'passed-over': { title: 'sv.bot.passedLabel', detail: 'sv.bot.verdict.passed-over' },
+  rising: { title: 'sv.bot.rising', detail: 'sv.bot.verdict.rising' },
+  'no-short': { title: 'sv.bot.noShort', detail: 'sv.bot.verdict.no-short' },
+  'fund-entry': { title: 'sv.bot.fundEntry', detail: 'sv.bot.verdict.fund-entry' },
+  'cash-skip': { title: 'sv.bot.cashSkip', detail: 'sv.bot.verdict.cash-skip' },
+  'bond-add': { title: 'sv.bot.bondAdd', detail: 'sv.bot.verdict.bond-add' },
+  'bond-discount': { title: 'sv.bot.bondDiscount', detail: 'sv.bot.verdict.bond-discount' },
+  'bond-rich': { title: 'sv.bot.bondRich', detail: 'sv.bot.verdict.bond-rich' },
+  'bond-hold': { title: 'sv.bot.bondHold', detail: 'sv.bot.verdict.bond-hold' },
+  'bond-fund-down': { title: 'sv.bot.bondFundDown', detail: 'sv.bot.verdict.bond-fund-down' },
+  'bond-fund-flat': { title: 'sv.bot.bondFundFlat', detail: 'sv.bot.verdict.bond-fund-flat' },
+}
+
+const ADVICE: readonly BotVerdict[] = ['bond-add', 'fund-entry']
+
+function renderReview(row: BotReview, t: Translate) {
+  const quiet = VERDICT_KEY[row.verdict as Exclude<BotVerdict, BotKind>]
+  const title = quiet === undefined ? t(KIND_KEY[row.verdict as BotKind]) : t(quiet.title)
+  const detail = quiet === undefined
+    ? (row.reason === undefined ? '' : t(REASON_KEY[row.reason]))
+    : t(quiet.detail)
+  const percent = row.instrument === 'ofz' || row.instrument === 'bond' ? '%' : ''
+  const price = row.price > 0 ? ` · ${row.price.toFixed(2)}${percent}` : ''
+  const move = row.move === undefined ? '' : ` · ${row.move > 0 ? '+' : ''}${row.move.toFixed(2)}`
+  const lots = row.lots > 0 ? ` · ${row.lots}` : ''
+  return (
+    <li key={`${row.verdict}-${row.symbol}`}>
+      <strong>{title}</strong>
+      {' '}
+      {row.name ?? row.symbol}
+      {' '}
+      ({row.symbol}){lots}{price}{move}
+      <div>{detail}</div>
+    </li>
+  )
+}
+
+function money(value: number): string {
+  return Math.round(value).toLocaleString('ru-RU')
+}
+
+function Ladder({ ladder, t }: { ladder: BondLadder | undefined; t: Translate }) {
+  if (ladder === undefined || ladder.steps.length === 0) return null
+  const end = ladder.steps.find(step => step.redeemed)
+  if (!ladder.couponsKnown) {
+    if (end === undefined) return null
+    return <li>{t('sv.bot.ladderNoCoupon', { years: String(end.years), result: money(end.result) })}</li>
+  }
+  return (
+    <li>
+      {ladder.steps.map(step => (
+        <div key={`${step.years}-${step.redeemed ? 'end' : 'year'}`}>
+          {step.redeemed
+            ? t('sv.bot.ladderEnd', {
+              years: String(step.years),
+              coupons: money(step.coupons),
+              result: money(step.result),
+            })
+            : t('sv.bot.ladderYear', { years: String(step.years), coupons: money(step.coupons) })}
+        </div>
+      ))}
+    </li>
+  )
+}
+
 function loadBook(): BotPosition[] {
   const raw = readJson<BotPosition[]>(BOOK_KEY, [])
   return Array.isArray(raw) ? raw.filter(row => typeof row?.symbol === 'string' && row.symbol !== '') : []
 }
 
-async function mapPool<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
-  const out: R[] = new Array(items.length)
-  let cursor = 0
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor
-      cursor += 1
-      out[index] = await run(items[index] as T)
-    }
-  })
-  await Promise.all(workers)
-  return out
-}
-
 export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) {
   const [book, setBook] = useState<BotPosition[]>(() => loadBook())
-  const [actions, setActions] = useState<BotAction[] | null>(null)
-  const [busy, setBusy] = useState<'check' | 'submit' | null>(null)
+  const snap = useSyncExternalStore(robotSession.subscribe, robotSession.get)
+  const [busy, setBusy] = useState<'submit' | null>(null)
+  const busyRef = useRef<'submit' | null>(null)
   const [note, setNote] = useState<string>('')
   const [now, setNow] = useState(() => Date.now())
   const session = moexEquitySession(now)
@@ -95,116 +166,140 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
   const save = (next: BotPosition[]): void => {
     setBook(next)
     writeJson(BOOK_KEY, next)
+    robotSession.holdBook(next)
   }
 
-  const check = async (): Promise<void> => {
-    setBusy('check')
-    setNote('')
-    try {
-      const symbols = await bridge.fetchSymbols('ru')
-      const shares = symbols.filter(row => botTradableShare(row.symbol)).slice(0, SCAN_LIMIT)
-      const extra = book.filter(row => !shares.some(share => share.symbol.toUpperCase() === row.symbol.toUpperCase()))
-      const queue = [
-        ...shares,
-        ...extra.map(row => ({ symbol: row.symbol, name: row.symbol })),
-      ]
-      const candidates = await mapPool(queue, CONCURRENCY, async (row) => {
-        try {
-          const bars = await bridge.fetchKlines('ru', row.symbol, '1d', 120)
-          return { symbol: row.symbol, ...(row.name === undefined ? {} : { name: row.name }), bars }
-        } catch {
-          return { symbol: row.symbol, bars: [] as KlineWire[] }
-        }
-      })
-      setActions(decideBotBook(candidates, book))
-    } catch {
-      setNote(t('sv.bot.checkFailed'))
-    } finally {
-      setBusy(null)
-    }
-  }
+  useEffect(() => {
+    robotSession.holdBook(book)
+  }, [book])
+
+  const reviews = snap.reviews
+  const skippedFunds = snap.skippedFunds
+  const watching = snap.watching
 
   const submit = async (): Promise<void> => {
-    if (actions === null || bridge.placeBotDryRunOrder === undefined) return
-    const orders = actions.filter(row => row.kind === 'buy' || row.kind === 'add' || row.kind === 'sell')
+    if (reviews === null || bridge.placeBotDryRunOrder === undefined) return
+    const orders = reviews.filter(row => row.instrument === 'share' && (row.verdict === 'buy' || row.verdict === 'add' || row.verdict === 'sell'))
     if (orders.length === 0) return
     const liveSession = moexEquitySession()
     setNow(Date.now())
     if (liveSession !== 'trading') {
-      setNote(t(SESSION_KEY[liveSession]))
+      setNote(t(SESSION_KEY[liveSession], waitUntilOpen(t, Date.now())))
       return
     }
+    if (busyRef.current !== null) return
+    busyRef.current = 'submit'
     setBusy('submit')
     setNote('')
     let next = book
     let failed = 0
+    try {
     for (const action of orders) {
-      const side = action.kind === 'sell' ? 'sell' as const : 'buy' as const
+      const side = action.verdict === 'sell' ? 'sell' as const : 'buy' as const
       const result = await bridge.placeBotDryRunOrder({ symbol: action.symbol, side, quantity: action.lots })
-      if (result.order === undefined) {
+      if (result.order === undefined || action.reason === undefined) {
         failed += 1
         continue
       }
-      next = applyBotFill(next, action)
+      if (action.verdict !== 'buy' && action.verdict !== 'add' && action.verdict !== 'sell') continue
+      next = applyBotFill(next, {
+        symbol: action.symbol,
+        ...(action.name === undefined ? {} : { name: action.name }),
+        kind: action.verdict,
+        lots: action.lots,
+        price: action.price,
+        reason: action.reason,
+      })
     }
     save(next)
-    setActions(null)
     setNote(failed === 0 ? t('sv.bot.sent') : t('sv.bot.failed'))
-    setBusy(null)
+    } finally {
+      busyRef.current = null
+      setBusy(null)
+    }
   }
 
-  const orders = (actions ?? []).filter(row => row.kind !== 'hold')
-  const holds = (actions ?? []).filter(row => row.kind === 'hold')
+  const rows = reviews ?? []
+  const orders = rows.filter(row => row.instrument === 'share' && (row.verdict === 'buy' || row.verdict === 'add' || row.verdict === 'sell'))
+  const holds = rows.filter(row => row.verdict === 'hold')
+  const advice = rows.filter(row => ADVICE.includes(row.verdict))
+  const rising = rows.filter(row => row.verdict === 'rising')
+  const rest = reviews === null ? null : {
+    discount: String(rows.filter(row => row.verdict === 'bond-discount').length),
+    near: String(rows.filter(row => row.verdict === 'bond-hold').length),
+    rich: String(rows.filter(row => row.verdict === 'bond-rich').length),
+    flat: String(rows.filter(row => row.verdict === 'no-cross' || row.verdict === 'passed-over').length),
+    shorts: String(rows.filter(row => row.verdict === 'no-short').length),
+    unread: String(rows.filter(row => row.verdict === 'no-bars' || row.verdict === 'short-history').length),
+  }
+  const report = reviews === null ? null : {
+    count: String(rows.length),
+    ready: String(rows.filter(row => row.verdict !== 'no-bars').length),
+    unread: String(rows.filter(row => row.verdict === 'no-bars').length),
+    buys: String(rows.filter(row => row.verdict === 'buy').length),
+    adds: String(rows.filter(row => row.verdict === 'add').length),
+    sells: String(rows.filter(row => row.verdict === 'sell').length),
+  }
 
   return (
     <div className={css.botPane} data-dshtrading-bot="">
       <p className={css.cardSummary}>{t('sv.bot.hint')}</p>
       <p className={css.cardSummary}>{t('sv.bot.dryRun')}</p>
-      <p className={css.cardSummary}>{t(SESSION_KEY[session])}</p>
+      <p className={css.cardSummary}>
+        {session === 'trading' ? t(SESSION_KEY[session]) : t(SESSION_KEY[session], waitUntilOpen(t, now))}
+      </p>
       <div className={css.mgmtRow}>
-        <button type="button" className={css.horizonBtn} disabled={busy !== null} onClick={() => { void check() }}>
-          {busy === 'check' ? t('sv.bot.checking') : t('sv.bot.check')}
+        <button type="button" className={css.horizonBtn} disabled={busy !== null || snap.busy} onClick={() => { void robotSession.check(bridge, book) }}>
+          {snap.busy ? t('sv.bot.checking') : t('sv.bot.check')}
         </button>
         <button
           type="button"
           className={css.horizonBtn}
-          disabled={busy !== null || orders.length === 0 || session !== 'trading' || bridge.placeBotDryRunOrder === undefined}
+          disabled={busy !== null || snap.busy || orders.length === 0 || session !== 'trading' || bridge.placeBotDryRunOrder === undefined}
           onClick={() => { void submit() }}
         >
           {busy === 'submit' ? t('sv.bot.submitting') : t('sv.bot.submit')}
         </button>
       </div>
+      {watching && <p className={css.cardSummary}>{t('sv.bot.watching')}</p>}
+      {snap.failed && <p className={css.cardSummary}>{t('sv.bot.checkFailed')}</p>}
       {note !== '' && <p className={css.cardSummary}>{note}</p>}
-      {actions !== null && orders.length === 0 && holds.length === 0 && (
+      {report !== null && rows.length === 0 && (
         <p className={css.cardSummary}>{t('sv.bot.empty')}</p>
       )}
-      {orders.length > 0 && (
+      {report !== null && rows.length > 0 && (
+        <p className={css.cardSummary}>{t('sv.bot.report', report)}</p>
+      )}
+      {[...orders, ...holds].length > 0 && (
         <ul className={css.botList}>
-          {orders.map(row => (
-            <li key={`${row.kind}-${row.symbol}`}>
-              <strong>{t(KIND_KEY[row.kind])}</strong>
-              {' '}
-              {row.name ?? row.symbol}
-              {' '}
-              ({row.symbol}) · {row.lots} · {row.price.toFixed(2)}
-              <div>{t(REASON_KEY[row.reason])}</div>
-            </li>
-          ))}
+          {[...orders, ...holds].map(row => renderReview(row, t))}
         </ul>
       )}
-      {holds.length > 0 && (
-        <ul className={css.botList}>
-          {holds.map(row => (
-            <li key={`hold-${row.symbol}`}>
-              <strong>{t('sv.bot.hold')}</strong>
-              {' '}
-              {row.name ?? row.symbol}
-              {' '}
-              ({row.symbol}) · {row.lots}
-              <div>{t(REASON_KEY[row.reason])}</div>
-            </li>
-          ))}
-        </ul>
+      {reviews !== null && skippedFunds > 0 && (
+        <p className={css.cardSummary}>{t('sv.bot.finex', { count: String(skippedFunds) })}</p>
+      )}
+      {reviews !== null && (
+        <>
+          <h3 className={css.botTitle}>{t('sv.bot.adviceTitle')}</h3>
+          {advice.length === 0
+            ? <p className={css.cardSummary}>{t('sv.bot.adviceEmpty')}</p>
+            : (
+              <ul className={css.botList}>
+                {advice.map(row => (
+                  <Fragment key={`${row.verdict}-${row.symbol}`}>
+                    {renderReview(row, t)}
+                    <Ladder ladder={snap.ladders[row.symbol]} t={t} />
+                  </Fragment>
+                ))}
+              </ul>
+            )}
+        </>
+      )}
+      {rising.length > 0 && (
+        <p className={css.cardSummary}>{t('sv.bot.risingLine', { names: rising.map(row => row.name ?? row.symbol).join(', ') })}</p>
+      )}
+      {rest !== null && (
+        <p className={css.cardSummary}>{t('sv.bot.rest', rest)}</p>
       )}
       <h3 className={css.botTitle}>{t('sv.bot.book')}</h3>
       {book.length === 0 ? <p className={css.cardSummary}>{t('sv.bot.bookEmpty')}</p> : (

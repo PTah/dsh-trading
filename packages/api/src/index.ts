@@ -79,6 +79,10 @@ export interface Ticker {
     readonly pricePercent: number
     readonly clean: number
     readonly dirty: number
+    /** Ближайшая купонная выплата на одну бумагу, в валюте номинала. */
+    readonly couponPay?: number
+    readonly maturity?: string
+    readonly couponsPerYear?: number
   }
   /**
    * 这只证券是什么（俄股名册）：板块、行业枚举、债券到期日与年付息次数。

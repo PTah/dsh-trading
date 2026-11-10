@@ -56,6 +56,9 @@ export interface StageViewRegistry {
   subscribe(listener: () => void): () => void
   /** 名册修订号（单调递增），配合 subscribe 供 useSyncExternalStore。 */
   getVersion(): number
+  /** Полоса робота над вкладками. Живёт, пока смонтирован MiddleStage. */
+  setBanner(render: ComponentType | null): void
+  getBanner(): ComponentType | null
 }
 
 /** shell 保留 id：行情视图是 registry 的内建种子条目，第三方不得占用。 */
@@ -67,6 +70,7 @@ export function createStageViewRegistry(): StageViewRegistry {
   const listeners = new Set<() => void>()
   let version = 0
   let seq = 0
+  let banner: ComponentType | null = null
 
   // 内建种子：quote 视图（tab 条从名册统一渲染；render 不会被调用——
   // MiddleStage 对 quote 走 QuoteStage 直引面）。种子在工厂内写入，
@@ -106,6 +110,12 @@ export function createStageViewRegistry(): StageViewRegistry {
       return () => { listeners.delete(listener) }
     },
     getVersion: () => version,
+    setBanner(render) {
+      banner = render
+      version += 1
+      for (const listener of listeners) listener()
+    },
+    getBanner: () => banner,
   }
 }
 

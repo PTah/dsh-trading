@@ -12,6 +12,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ComponentType } from 'react'
 import type { ToolCallOwnerProps } from '@deepseek-ai/dsh-client-ui-tool/client'
 import { StrategyView } from './StrategyView.tsx'
+import { RobotBanner } from './RobotBanner.tsx'
 import { StrategyBacktestCard, StrategyAuthorCard } from './toolview.tsx'
 import type { StrategyEditorSaveInput } from './StrategyEditor.tsx'
 import type { ScreenerEditorSaveInput } from './ScreenerEditor.tsx'
@@ -28,6 +29,7 @@ export const inject = ['slots', 'locale']
 
 /** tradingStageViews / tradingBridge 的最小结构面（避免对 shell 包类型依赖）。 */
 interface StageViewsService {
+  setBanner?: (render: ComponentType | null) => void
   register(definition: {
     id: string
     titleKey: string
@@ -91,6 +93,7 @@ export function apply(ctx: ClientContext): void {
       deleteCustomScreener: faces.tradingBridge.deleteCustomScreener?.bind(faces.tradingBridge),
       resetScreener: faces.tradingBridge.resetScreener?.bind(faces.tradingBridge),
     }
+    faces.tradingStageViews.setBanner?.(() => RobotBanner({ t: t as never }))
     faces.tradingStageViews.register({
       id: 'strategy',
       titleKey: 'stage.strategy',

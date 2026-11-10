@@ -7,7 +7,7 @@
  * 中栏 tab。同一时刻仅挂载活动视图（切换即卸载，图表态由 store/localStorage
  * 承接，后台视图零渲染开销）。
  */
-import { useState, useSyncExternalStore } from 'react'
+import { createElement, useState, useSyncExternalStore } from 'react'
 import type { ComponentType } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { readJson, writeJson } from './store.ts'
@@ -74,6 +74,7 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
   // 名册响应式：registry 版本号驱动 tab 条重渲染；当前视图是普通 state
   // （readStageView 净化 localStorage 脏值）。
   useSyncExternalStore(stageViews.subscribe, stageViews.getVersion)
+  const banner = useSyncExternalStore(stageViews.subscribe, stageViews.getBanner)
   const [view, setView] = useState<string>(readStageView)
 
   const switchView = (next: string): void => {
@@ -83,6 +84,7 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
 
   return (
     <div className={css.root} data-dshtrading-middle-stage="">
+      {banner !== null ? createElement(banner) : null}
       <div className={css.tabs} role="tablist" aria-label="stage">
         {stageViews.list().map(definition => (
           <button
