@@ -3,7 +3,7 @@
 ## Context and Architecture
 - Added `@dshtrading/client-ui-bot-gui` as a private local Cordis dual-half plugin.
 - **Node Half**: Mounts proxy route `/dshtrading/api/bot-gui` fenced by `connection.requestRejection(req)` (browser authentication & origin fence). Proxies `GET /:bot/cards` and `POST /:bot/commands` to configured bot edges with Bearer token authentication (`deviceId + '.' + secret`) and injects `x-dsht-caps: action:ack,action:dismiss,action:open-detail,action:retry-sync,action:approve,action:reject,action:pause,action:resume,action:kill,action:flatten,action:grant-control,action:revoke-device`.
-- **Client Half**: Registers into the `tradingStageViews` Cordis service (`id: 'bot'`, `titleKey: 'stage.bot'`, `order: 5`).
+- **Client Half**: The package can still register `tradingStageViews` (`id: 'bot'`, `titleKey: 'stage.bot'`, `order: 5`) when the plugin row is mounted. The trading-web seed and the live profile do not insert that row, so the middle stage does not show the tab. The empty cockpit («No Trading Bots Configured») was a second product: an external bot edge with `baseUrl`, `deviceId` and `secret`, not the MOEX dry-run station on the strategy tab.
 - **Contract**: Inlines closed enums (`CARD_TYPES`, `FIELD_KINDS`, `ACTION_KINDS`, `CONFIRM_LEVELS`, `CARD_LIMITS`) matching satellite repo `packages/contract`.
 - **Security & Confirmation**: High-risk actions (`pause`, `resume`, `kill`, `flatten`, `grant-control`, `revoke-device`) require strong confirmation via `ACTION_CONFIRM` modal dialog prior to forwarding.
 - **Multi-bot**: Supports switcher selector dropdown loaded from `/dshtrading/api/bot-gui/status`.

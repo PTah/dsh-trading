@@ -48,3 +48,4 @@ dsh-trading-client-ui-bot-gui (@dshtrading/client-ui-bot-gui): failed to import
 - 桌面 seed 的 patch 层与依赖清单从此绑定：下次有人在 `cordis.patch.yml` 里插一行而忘了补依赖，构建阶段即失败并点名那个包。依赖边有两个来源，判据只有 `assertSeedPatchRowsResolve()` 一条：vendored 私有包漏 `DIRECT_TRADING_PACKAGES`、registry 插件漏 `REGISTRY_DEPENDENCIES`。
 - 修复只影响全新 home 的播种结果与后续安装包；CLI 维护的 live profile 本来就正常，不受影响。
 - 桌面壳的 profile 种子从此挂 DSH 自带 Computer Use，`cua_driver_native__*` 是交易会话的原生桌面操作面（[UI 验证手法](../process/2026-09-04-ui-verification-hosted-http-headless-chrome.md)依赖它在列）；宿主侧还需要 macOS 授权，挂载本身不给权限。
+- 2026-11-10 起 trading-web 的 patch 层不再插入 `dsh-trading-client-ui-bot-gui`。包仍留在直接依赖里，所以以后若把行加回去，种子仍能解析。中栏不显示这个页签是当前选择，不是本笔记里的 failed-to-import。事实见 [bot-gui stage view](../feature/2026-10-07-bot-gui-stage-view.md)。

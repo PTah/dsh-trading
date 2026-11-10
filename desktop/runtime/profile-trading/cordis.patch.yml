@@ -6,11 +6,10 @@
 # node 半挂 /dshtrading/api/special-indicators 白名单代理桥。凭据走凭据链
 # （设置中心 credentials.finance → 环境变量 FINANCE_API_PASSWORD），本文件不落密码；
 # 未配置时 tab 显示设置引导占位。卸载 = 删本行。
+# client-ui-bot-gui 不插入：那是外部机器人的空控制台，不是策略页里的 MOEX 机器人。
 - insert:
     - id: dsh-trading-client-ui-special-indicators
       name: '@dshtrading/client-ui-special-indicators'
-    - id: dsh-trading-client-ui-bot-gui
-      name: '@dshtrading/client-ui-bot-gui'
 
 # DSH 自带 Computer Use（2026-10-16）：单槽服务 + 原生 Cua Driver provider，
 # 工具以 cua_driver_native__<upstream 名> 出现在会话工具面，截图走持久化附件，
