@@ -29,11 +29,13 @@ export {
   botTicker,
   botTradableShare,
   decideBotBook,
+  moexEquitySession,
   type BotAction,
   type BotCandidate,
   type BotKind,
   type BotPosition,
   type BotReason,
+  type MoexSession,
 } from './bot.ts'
 
 // 标的价格显示小数位（自适应 2→3 位）：client-ui 两包经此复用同一规则，

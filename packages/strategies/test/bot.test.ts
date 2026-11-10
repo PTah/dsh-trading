@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Kline } from '../src/types.ts'
 import { trendSmaStrategy } from '../src/paradigms/trend-sma.ts'
-import { applyBotFill, botTradableShare, decideBotBook, type BotPosition } from '../src/bot.ts'
+import { applyBotFill, botTradableShare, decideBotBook, moexEquitySession, type BotPosition } from '../src/bot.ts'
 
 function barsFrom(closes: readonly number[]): Kline[] {
   return closes.map((close, index) => ({
@@ -74,5 +74,14 @@ describe('MOEX bot book', () => {
     const actions = decideBotBook(names.map(symbol => ({ symbol, bars: entry })), [])
     expect(actions.filter(row => row.kind === 'buy')).toHaveLength(3)
     expect(actions.some(row => row.symbol === 'IMOEX')).toBe(false)
+  })
+
+  it('Agent: treats the Moscow equity clock as closed before the main session', () => {
+    expect(moexEquitySession(new Date('2026-11-10T04:55:00.000Z'))).toBe('closed')
+    expect(moexEquitySession(new Date('2026-11-10T06:55:00.000Z'))).toBe('auction')
+    expect(moexEquitySession(new Date('2026-11-10T07:30:00.000Z'))).toBe('trading')
+    expect(moexEquitySession(new Date('2026-11-10T15:45:00.000Z'))).toBe('auction')
+    expect(moexEquitySession(new Date('2026-11-10T17:00:00.000Z'))).toBe('trading')
+    expect(moexEquitySession(new Date('2026-11-14T07:30:00.000Z'))).toBe('closed')
   })
 })

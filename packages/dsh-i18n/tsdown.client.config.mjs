@@ -18,6 +18,12 @@ const purityGate = () => ({
     if (/^@deepseek-ai\/(?:cosmokit|schemastery)(?:\/|$)/.test(source)) return null
     throw new Error(`client bundle purity: "${source}" is not in the externals list — the i18n client half must stay SDK-value-free (type-only imports)`)
   },
+  renderChunk(code) {
+    const leaked = code.match(/require\("(@dshtrading\/[^"]+)"\)/)
+    if (leaked) {
+      throw new Error(`dsh-i18n client bundle left ${leaked[1]} external. Rebuild that package's locales first, then rebuild dsh-i18n.`)
+    }
+  },
 })
 
 

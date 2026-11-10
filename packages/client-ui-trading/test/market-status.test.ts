@@ -107,6 +107,17 @@ describe('getMarketSessionStatus', () => {
     })
   })
 
+  it('ru equity session follows the Moscow clock', () => {
+    expect(getMarketSessionStatus('ru', new Date('2026-11-10T04:55:00.000Z'))).toMatchObject({
+      statusKey: 'status.closed',
+      isOpen: false,
+    })
+    expect(getMarketSessionStatus('ru', new Date('2026-11-10T07:30:00.000Z'))).toMatchObject({
+      statusKey: 'status.trading',
+      isOpen: true,
+    })
+  })
+
   it('us market session status calculation', () => {
     // 2026-08-31 is Monday (EDT, UTC-4)
     // 06:00 ET (10:00 UTC) -> preMarket

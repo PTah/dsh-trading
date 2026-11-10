@@ -3,15 +3,17 @@
  * Проверка читает дневные свечи первых акций из списка «Россия».
  * Учебная заявка всегда dry-run. Книга лежит отдельно от избранного.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   applyBotFill,
   botTradableShare,
   decideBotBook,
+  moexEquitySession,
   type BotAction,
   type BotKind,
   type BotPosition,
   type BotReason,
+  type MoexSession,
 } from '@dshtrading/strategies'
 import { readJson, writeJson } from './shell-faces.ts'
 import type { StrategyLocaleKey } from './contract.ts'
@@ -36,6 +38,12 @@ export interface BotPaneBridge {
   fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<KlineWire[]>
   fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string }>>
   placeBotDryRunOrder?: (input: { symbol: string; side: 'buy' | 'sell'; quantity: number }) => Promise<{ order?: unknown; error?: string }>
+}
+
+const SESSION_KEY: Record<MoexSession, StrategyLocaleKey> = {
+  trading: 'sv.bot.sessionOpen',
+  closed: 'sv.bot.sessionClosed',
+  auction: 'sv.bot.sessionAuction',
 }
 
 const KIND_KEY: Record<BotKind, StrategyLocaleKey> = {
@@ -76,6 +84,13 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
   const [actions, setActions] = useState<BotAction[] | null>(null)
   const [busy, setBusy] = useState<'check' | 'submit' | null>(null)
   const [note, setNote] = useState<string>('')
+  const [now, setNow] = useState(() => Date.now())
+  const session = moexEquitySession(now)
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
 
   const save = (next: BotPosition[]): void => {
     setBook(next)
@@ -101,10 +116,9 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
           return { symbol: row.symbol, bars: [] as KlineWire[] }
         }
       })
-      void held
       setActions(decideBotBook(candidates, book))
     } catch {
-      setNote(t('sv.bot.failed'))
+      setNote(t('sv.bot.checkFailed'))
     } finally {
       setBusy(null)
     }
@@ -114,6 +128,12 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
     if (actions === null || bridge.placeBotDryRunOrder === undefined) return
     const orders = actions.filter(row => row.kind === 'buy' || row.kind === 'add' || row.kind === 'sell')
     if (orders.length === 0) return
+    const liveSession = moexEquitySession()
+    setNow(Date.now())
+    if (liveSession !== 'trading') {
+      setNote(t(SESSION_KEY[liveSession]))
+      return
+    }
     setBusy('submit')
     setNote('')
     let next = book
@@ -140,6 +160,7 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
     <div className={css.botPane} data-dshtrading-bot="">
       <p className={css.cardSummary}>{t('sv.bot.hint')}</p>
       <p className={css.cardSummary}>{t('sv.bot.dryRun')}</p>
+      <p className={css.cardSummary}>{t(SESSION_KEY[session])}</p>
       <div className={css.mgmtRow}>
         <button type="button" className={css.horizonBtn} disabled={busy !== null} onClick={() => { void check() }}>
           {busy === 'check' ? t('sv.bot.checking') : t('sv.bot.check')}
@@ -147,7 +168,7 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
         <button
           type="button"
           className={css.horizonBtn}
-          disabled={busy !== null || orders.length === 0 || bridge.placeBotDryRunOrder === undefined}
+          disabled={busy !== null || orders.length === 0 || session !== 'trading' || bridge.placeBotDryRunOrder === undefined}
           onClick={() => { void submit() }}
         >
           {busy === 'submit' ? t('sv.bot.submitting') : t('sv.bot.submit')}

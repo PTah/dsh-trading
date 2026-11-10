@@ -3,6 +3,7 @@
  * 1. 提供各市场主流代表性大盘指数定义（MARKET_INDICES）；
  * 2. 根据当地时区与开闭市规则计算交易时段状态（getMarketSessionStatus）。
  */
+import { moexEquitySession } from '@dshtrading/strategies'
 import type { MarketLocaleKey } from './contract.ts'
 import type { MarketId } from './types.ts'
 
@@ -184,6 +185,13 @@ export function getMarketSessionStatus(market: MarketId, dateOrTimestamp: Date |
     if (dayOfWeek === 6 && minutes >= 300) return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
     if (dayOfWeek === 1 && minutes < 360) return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
     return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
+  }
+
+  if (market === 'ru') {
+    const session = moexEquitySession(date)
+    if (session === 'trading') return { statusKey: 'status.trading', isOpen: true, color: '#2ba471' }
+    if (session === 'auction') return { statusKey: 'status.auction', isOpen: false, color: '#e37318' }
+    return { statusKey: 'status.closed', isOpen: false, color: '#8e95a3' }
   }
 
   if (market === 'us') {

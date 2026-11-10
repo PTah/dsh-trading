@@ -69,7 +69,10 @@ zh 改 en 漏改无法机器发现。
 - **audit 读 lib 产物**：dsh-i18n client 半 import 源包 `lib/client/locales.js`——
   源包词典改动后必须先重建源包再重建 dsh-i18n，否则 drift 报警（这正是门禁价值，
   但 CI 里 build 顺序要保证）。`pnpm --filter './packages/client-ui-*'` glob filter
-  实测漏包，显式 `pnpm -r build` 稳妥。
+  实测漏包，显式 `pnpm -r build` 稳妥。与源包并行重建时，源包 `clean` 会短暂拿掉
+  `locales.js`，tsdown 把解析失败的 import 留成 `require("@dshtrading/.../locales")`。
+  宿主 client loader 没有这张模块表，web boot 直接拒绝 `@dshtrading/dsh-i18n`。
+  `tsdown.client.config.mjs` 的 purity 插件在产物里见到这种 require 就让构建失败。
 - **`{{provider}}` 双括号笔误**：settings 词典 2 处 `{{provider}}` 是既有 bug
   （SDK 插值是单括号 `{name}`），en 下渲染出 `{Binance}`，本次顺手修正。
 - **settings 包 PropsLocale 的 t 座位**：本包独立编译下 PropsRuntime 的 SlotMap

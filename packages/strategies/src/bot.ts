@@ -164,3 +164,37 @@ export function applyBotFill(book: readonly BotPosition[], action: BotAction): B
     ? { ...row, lots: row.lots + action.lots, adds: row.adds + 1 }
     : row)
 }
+
+export type MoexSession = 'closed' | 'auction' | 'trading'
+
+/**
+ * Будний календарь акций Мосбиржи по часам Москвы.
+ * Основная сессия 10:00–18:40, вечерняя 19:00–23:50.
+ * Аукционы 09:50–10:00 и 18:40–18:50. Праздники биржи сюда не входят.
+ */
+export function moexEquitySession(at: Date | number = Date.now()): MoexSession {
+  const date = typeof at === 'number' ? new Date(at) : at
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Moscow',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: 'numeric',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  let weekday = ''
+  let hour = 0
+  let minute = 0
+  for (const part of parts) {
+    if (part.type === 'weekday') weekday = part.value
+    else if (part.type === 'hour') hour = Number(part.value)
+    else if (part.type === 'minute') minute = Number(part.value)
+  }
+  const day = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }[weekday]
+  if (day === 0 || day === 6) return 'closed'
+  const minutes = hour * 60 + minute
+  if (minutes >= 9 * 60 + 50 && minutes < 10 * 60) return 'auction'
+  if (minutes >= 10 * 60 && minutes < 18 * 60 + 40) return 'trading'
+  if (minutes >= 18 * 60 + 40 && minutes < 18 * 60 + 50) return 'auction'
+  if (minutes >= 19 * 60 && minutes < 23 * 60 + 50) return 'trading'
+  return 'closed'
+}
