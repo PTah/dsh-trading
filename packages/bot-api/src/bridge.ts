@@ -22,11 +22,12 @@
  *   后者全程最多兜底 1 次；限流/坏符号/交易所业务错误仍原样抛。整段同源、provider 如实标注。
  */
 import { instrumentFormOf } from '@dshtrading/api'
-import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, PredictionPriceHistory, PredictionPriceHistoryRequest, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
+import type { ActiveBuySnapshot, AccountBalance, DerivativesData, DerivativesHistory, FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentListing, InstrumentRef, Interval, Kline, KlineCapability, MacroCalendarEntry, MacroRateEntry, MarketDataService, NewsAggregator, NewsItem, Order, Orderbook, OrderRequest, Position, PredictionFeed, PredictionMeeting, PredictionPriceHistory, PredictionPriceHistoryRequest, SouthboundHoldingHistory, StockFundamentals, Ticker, TradeFill, TradeService, TradeTick } from '@dshtrading/api'
 import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@dshtrading/kit-cn'
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
+import { aggregateNews as aggregateRuNews } from '@dshtrading/kit-ru'
 import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
 import { carryInstanceExtras, clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, defaultActivationInstance, resolveIndicatorSpec, sanitizeApplyScope, sanitizeInstance, symbolScopeKey, withHiddenScopes } from '@dshtrading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore, KnowledgeImportEntry, KnowledgeImportMode } from '@dshtrading/knowledge'
@@ -417,6 +418,8 @@ export interface SymbolInfoWire {
   form?: InstrumentForm
   /** 资产类别（交易所元数据原样透传，取不到即留空，禁止按符号猜）。 */
   assetClass?: InstrumentAssetClass
+  /** 名册分组（share/fund/bond）。缺省不分组。 */
+  listing?: InstrumentListing
 }
 
 /**
@@ -431,6 +434,7 @@ function toSymbolInfoWire(item: InstrumentRef): SymbolInfoWire {
     ...(item.name ? { name: item.name } : {}),
     ...(form !== undefined ? { form } : {}),
     ...(item.assetClass !== undefined ? { assetClass: item.assetClass } : {}),
+    ...(item.listing !== undefined ? { listing: item.listing } : {}),
   }
 }
 
@@ -1674,6 +1678,7 @@ export class TradingBridge {
         : id === 'hk' ? aggregateHkNews
         : id === 'us' ? aggregateUsNews
         : id === 'crypto' ? aggregateCryptoNews
+        : id === 'ru' ? aggregateRuNews
         : undefined)
 
     if (aggregator === undefined) {

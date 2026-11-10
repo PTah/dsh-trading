@@ -388,11 +388,37 @@
   text-align: center;
 }
 
-/* 表头三态排序开关（列表表头第 3 列 + 置顶分区标题行第 3 列共用同一列位）：
-   muted 字色，只有真的按了涨跌幅排序（active）才提亮；chevron 只在非默认顺序出现，
-   pct-asc 由旋转 180° 承载方向——不新增图标，也不改字号/字重（active 不引起重排）。 */
-.sortBtn {
-  grid-column: 3;
+.listHeaderColEnd {
+  text-align: right;
+}
+
+.sortLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px 2px;
+  flex: none;
+}
+
+.sortLabel {
+  flex: none;
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.sortSelect {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+  background: var(--dsw-futu-bg-surface, #fff);
+  border: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+}
+
+.sortBar {
   appearance: none;
   border: none;
   background: transparent;
@@ -404,32 +430,31 @@
   justify-content: flex-end;
   gap: 2px;
   font-family: inherit;
-  font-size: inherit;
+  font-size: 11px;
   color: var(--dsw-futu-text-muted, #8e95a3);
   cursor: pointer;
   border-radius: var(--dsw-futu-radius-xs, 3px);
   transition: color 0.15s;
 }
 
-.sortBtn:hover {
+.sortBar:hover {
   color: var(--dsw-futu-text-secondary, #5f6672);
 }
 
-.sortBtn[data-sort-mode='pct-desc'],
-.sortBtn[data-sort-mode='pct-asc'] {
+.sortBar:not([data-sort-mode='default']) {
   color: var(--dsw-futu-text-primary, #1a1e24);
 }
 
-.sortBtn:focus-visible {
+.sortBar:focus-visible {
   outline: 2px solid var(--dsw-futu-border-active, #3b82f6);
   outline-offset: -1px;
 }
 
-.sortBtn[data-sort-mode='pct-asc'] svg {
+.sortBar[data-sort-mode='yield-asc'] svg {
   transform: rotate(180deg);
 }
 
-.sortBtnLabel {
+.sortBarLabel {
   flex: none;
   white-space: nowrap;
 }
@@ -447,8 +472,19 @@
    （.list 的 4px + 本区 8px = 12px，与行的 8px 内边距、分隔线的 8px 外边距一致；
    沿用继承来的 12px 会到 16px，标题就比它所辖的行偏出 4px）。 */
 .pinnedHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border-bottom: none;
-  padding-inline: 8px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+}
+
+.pinnedHeader .sortLine {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
 }
 
 .pinnedTitle {
@@ -467,6 +503,59 @@
 }
 
 /* 三段式标的行 */
+.catalogHint {
+  padding: 6px 12px 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.catalogSection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 8px 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--dsw-futu-text-secondary, #5f6672);
+  text-align: left;
+  cursor: pointer;
+}
+
+.catalogCaret {
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  transform-origin: 35% 50%;
+}
+
+.catalogCaret[data-open='true'] {
+  transform: rotate(90deg);
+}
+
+.catalogCount {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.catalogAdd {
+  justify-self: end;
+  border: none;
+  background: transparent;
+  color: var(--dsw-futu-text-link, #1f6feb);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .row {
   position: relative;
   display: grid;
@@ -484,6 +573,16 @@
   text-align: left;
   cursor: pointer;
   transition: background 0.12s;
+}
+
+.row[data-catalog='true'] {
+  grid-template-columns: minmax(0, 1fr) auto;
+  height: 40px;
+}
+
+.row[data-catalog='true'] .remove {
+  position: static;
+  opacity: 1;
 }
 
 .row:hover {
@@ -525,6 +624,41 @@
   text-overflow: ellipsis;
   font-variant-numeric: tabular-nums;
   min-width: 0;
+}
+
+.listingTag {
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: var(--dsw-futu-radius-xs, 3px);
+  flex: none;
+}
+
+.listingTag[data-listing='share'] {
+  color: #1d4e9e;
+  background: #e7f0ff;
+}
+
+.listingTag[data-listing='fund'] {
+  color: #5b3e9e;
+  background: #f1e9ff;
+}
+
+.listingTag[data-listing='bond'] {
+  color: #8a5a00;
+  background: #fff3d6;
+}
+
+.row[data-listing='share'] {
+  box-shadow: inset 3px 0 0 #3b6fd8;
+}
+
+.row[data-listing='fund'] {
+  box-shadow: inset 3px 0 0 #7a5af0;
+}
+
+.row[data-listing='bond'] {
+  box-shadow: inset 3px 0 0 #d0891a;
 }
 
 .marketTag {

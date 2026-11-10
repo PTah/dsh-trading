@@ -18,6 +18,8 @@
 
 import type {
   AccountBalance,
+  InstrumentListing,
+  InstrumentRef,
   Interval,
   Kline,
   Order,
@@ -63,11 +65,48 @@ export interface TBankInstrument {
   readonly currency: string
   /** 规范符号：TICKER 或 TICKER.CLASSCODE */
   readonly symbol: string
+  readonly listing: 'share' | 'fund' | 'bond' | 'other'
+  readonly sector?: string
+  readonly focus?: string
+  readonly maturity?: string
+  readonly couponsPerYear?: number
 }
 
 type JsonRecord = Record<string, unknown>
 
 const SERVICE = 'tinkoff.public.invest.api.contract.v1'
+
+/** MOEX 板块：侧栏「Россия」按股票 / 基金 / 债券分组，而不是自选名单。 */
+export const MOEX_LISTING_BOARDS: Record<InstrumentListing, readonly string[]> = {
+  share: ['TQBR'],
+  fund: ['TQTF', 'TQTD'],
+  bond: ['TQOB', 'TQCB', 'TQIR', 'TQOD'],
+}
+
+/** 从 InstrumentsService 的 instruments[] 里留下指定板块、可交易的行。 */
+export function moexRowsFromInstruments(rows: readonly JsonRecord[], listing: InstrumentListing): InstrumentRef[] {
+  const boards = new Set(MOEX_LISTING_BOARDS[listing])
+  const seen = new Set<string>()
+  const out: InstrumentRef[] = []
+  for (const row of rows) {
+    const classCode = String(row.classCode ?? '').toUpperCase()
+    if (!boards.has(classCode)) continue
+    if (row.apiTradeAvailableFlag === false) continue
+    const ticker = String(row.ticker ?? '').trim().toUpperCase()
+    if (!/^[A-Z0-9][A-Z0-9._-]{0,31}$/.test(ticker) || seen.has(ticker)) continue
+    seen.add(ticker)
+    const name = String(row.name ?? '').trim()
+    out.push({
+      symbol: ticker,
+      ...(name !== '' ? { name } : {}),
+      form: 'spot',
+      assetClass: 'equity',
+      listing,
+    })
+  }
+  out.sort((a, b) => a.symbol.localeCompare(b.symbol))
+  return out
+}
 
 export const LIVE_REST_BASE = 'https://invest-public-api.tinkoff.ru/rest'
 export const SANDBOX_REST_BASE = 'https://sandbox-invest-public-api.tinkoff.ru/rest'
@@ -136,6 +175,60 @@ export function quotationToNumber(q: unknown): number {
   const nano = Number(o.nano ?? 0)
   if (!Number.isFinite(units) || !Number.isFinite(nano)) return 0
   return units + nano / 1_000_000_000
+}
+
+const BOND_BOARDS = new Set(MOEX_LISTING_BOARDS.bond)
+
+/**
+ * Чистая цена облигации у T-Bank приходит в пунктах (1 пункт = 1% номинала).
+ * Полный чек = чистая цена в рублях + НКД.
+ */
+export function bondQuoteFromParts(pricePercent: number, nominal: number, aci: number): {
+  nominal: number
+  aci: number
+  pricePercent: number
+  clean: number
+  dirty: number
+} | undefined {
+  if (!(pricePercent > 0) || !(nominal > 0) || !Number.isFinite(aci) || aci < 0) return undefined
+  const clean = nominal * pricePercent / 100
+  return {
+    nominal,
+    aci,
+    pricePercent,
+    clean,
+    dirty: clean + aci,
+  }
+}
+
+export function listingOfClassCode(classCode: string): 'share' | 'fund' | 'bond' | 'other' {
+  const code = classCode.toUpperCase()
+  if ((MOEX_LISTING_BOARDS.bond as readonly string[]).includes(code)) return 'bond'
+  if ((MOEX_LISTING_BOARDS.fund as readonly string[]).includes(code)) return 'fund'
+  if ((MOEX_LISTING_BOARDS.share as readonly string[]).includes(code)) return 'share'
+  return 'other'
+}
+
+/** GetInstrumentBy / BondBy / ShareBy 里能解释「这是什么纸」的字段。 */
+export function readInstrumentFacts(row: JsonRecord): {
+  sector?: string
+  focus?: string
+  maturity?: string
+  couponsPerYear?: number
+} {
+  const sectorRaw = typeof row.sector === 'string' ? row.sector.trim() : ''
+  const sector = sectorRaw !== '' && !sectorRaw.toUpperCase().includes('UNSPECIFIED') ? sectorRaw : undefined
+  const focusRaw = typeof row.focusType === 'string' ? row.focusType.trim() : ''
+  const focus = focusRaw !== '' && !focusRaw.toUpperCase().includes('UNSPECIFIED') ? focusRaw : undefined
+  const maturityRaw = row.maturityDate
+  const maturity = typeof maturityRaw === 'string' && maturityRaw.trim() !== '' ? maturityRaw.trim() : undefined
+  const coupons = Number(row.couponQuantityPerYear)
+  return {
+    ...(sector !== undefined ? { sector } : {}),
+    ...(focus !== undefined ? { focus } : {}),
+    ...(maturity !== undefined ? { maturity } : {}),
+    ...(Number.isInteger(coupons) && coupons > 0 ? { couponsPerYear: coupons } : {}),
+  }
 }
 
 export function numberToQuotation(value: number): { units: string; nano: number } {
@@ -289,6 +382,36 @@ export class TBankRestClient {
     return id
   }
 
+  /** Shares + Etfs + Bonds，只留 MOEX 板块。单个板块失败不影响其余板块。 */
+  async listMoexCatalog(credentials: TBankCredentials): Promise<InstrumentRef[]> {
+    const methods: ReadonlyArray<{ method: 'Shares' | 'Etfs' | 'Bonds'; listing: InstrumentListing }> = [
+      { method: 'Shares', listing: 'share' },
+      { method: 'Etfs', listing: 'fund' },
+      { method: 'Bonds', listing: 'bond' },
+    ]
+    const merged: InstrumentRef[] = []
+    const seen = new Set<string>()
+    for (const item of methods) {
+      try {
+        const data = await this.request(
+          'InstrumentsService',
+          item.method,
+          { instrumentStatus: 'INSTRUMENT_STATUS_BASE' },
+          credentials,
+        )
+        const instruments = Array.isArray(data.instruments) ? data.instruments as JsonRecord[] : []
+        for (const row of moexRowsFromInstruments(instruments, item.listing)) {
+          if (seen.has(row.symbol)) continue
+          seen.add(row.symbol)
+          merged.push(row)
+        }
+      } catch (error) {
+        if (error instanceof TradingServiceError && error.code === 'TRADING_AUTH_FAILED') throw error
+      }
+    }
+    return merged
+  }
+
   async resolveInstrument(symbol: string, credentials: TBankCredentials): Promise<TBankInstrument> {
     const canonical = normalizeRuSymbol(symbol)
     const cached = this.instrumentCache.get(canonical)
@@ -323,6 +446,7 @@ export class TBankRestClient {
     let lot = 1
     let name = String(match.name ?? ticker)
     let currency = 'rub'
+    let facts = readInstrumentFacts(match)
     if (uid || figi) {
       try {
         const detail = await this.request(
@@ -338,6 +462,7 @@ export class TBankRestClient {
         if (typeof inst.lot === 'number' && inst.lot > 0) lot = inst.lot
         if (typeof inst.name === 'string' && inst.name) name = inst.name
         if (typeof inst.currency === 'string' && inst.currency) currency = inst.currency
+        facts = { ...facts, ...readInstrumentFacts(inst) }
       } catch {
         // lot 缺省 1：下单时若真实 lot>1，交易所会拒，错误原样抛出
       }
@@ -353,6 +478,8 @@ export class TBankRestClient {
       name,
       currency,
       symbol: resolvedClass && resolvedClass !== 'TQBR' ? `${ticker}.${resolvedClass}` : ticker,
+      listing: listingOfClassCode(resolvedClass),
+      ...facts,
     }
     this.instrumentCache.set(canonical, instrument)
     this.instrumentCache.set(instrument.symbol, instrument)
@@ -362,7 +489,7 @@ export class TBankRestClient {
   }
 
   async getTicker(symbol: string, credentials: TBankCredentials): Promise<Ticker> {
-    const instrument = await this.resolveInstrument(symbol, credentials)
+    let instrument = await this.resolveInstrument(symbol, credentials)
     const [last, book] = await Promise.all([
       this.request(
         'MarketDataService',
@@ -392,12 +519,47 @@ export class TBankRestClient {
       if (asks[0]) ask = quotationToNumber(asks[0].price)
     }
 
+    const lastPrice = price || ((bid !== undefined && ask !== undefined) ? (bid + ask) / 2 : 0)
+    let bond: Ticker['bond']
+    if (BOND_BOARDS.has(instrument.classCode) && lastPrice > 0) {
+      try {
+        const detail = await this.request(
+          'InstrumentsService',
+          'BondBy',
+          { idType: 'INSTRUMENT_ID_TYPE_UID', id: instrument.uid },
+          credentials,
+        )
+        const inst = (detail.instrument ?? {}) as JsonRecord
+        const nominal = quotationToNumber(inst.nominal)
+        const aci = quotationToNumber(inst.aciValue)
+        bond = bondQuoteFromParts(lastPrice, nominal, aci)
+        const bondFacts = readInstrumentFacts(inst)
+        if (bondFacts.maturity !== undefined) instrument = { ...instrument, maturity: bondFacts.maturity }
+        if (bondFacts.couponsPerYear !== undefined) instrument = { ...instrument, couponsPerYear: bondFacts.couponsPerYear }
+        if (typeof inst.name === 'string' && inst.name.trim() !== '') instrument = { ...instrument, name: inst.name.trim() }
+      } catch {
+        bond = undefined
+      }
+    }
+
+    const humanName = instrument.name.trim()
+    const name = humanName !== '' && humanName.toUpperCase() !== instrument.ticker.toUpperCase() ? humanName : undefined
     return {
       symbol: instrument.symbol,
-      price: price || ((bid !== undefined && ask !== undefined) ? (bid + ask) / 2 : 0),
+      price: lastPrice,
       timestamp,
+      ...(name !== undefined ? { name } : {}),
       ...(bid !== undefined ? { bid } : {}),
       ...(ask !== undefined ? { ask } : {}),
+      ...(bond !== undefined ? { bond } : {}),
+      about: {
+        listing: instrument.listing,
+        ...(instrument.sector !== undefined ? { sector: instrument.sector } : {}),
+        ...(instrument.focus !== undefined ? { focus: instrument.focus } : {}),
+        ...(instrument.maturity !== undefined ? { maturity: instrument.maturity } : {}),
+        ...(instrument.couponsPerYear !== undefined ? { couponsPerYear: instrument.couponsPerYear } : {}),
+        ...(instrument.listing === 'bond' && instrument.ticker.startsWith('SU') ? { ofz: true } : {}),
+      },
     }
   }
 

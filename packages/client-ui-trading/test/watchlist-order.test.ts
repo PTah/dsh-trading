@@ -58,8 +58,8 @@ describe('orderWatchlistRows · 置顶分区', () => {
     const pct: Record<string, number> = { 'us:AAPL': 3, 'us:MSFT': 1, 'us:NVDA': 2, 'us:GOOGL': -4, 'us:TSLA': 0.5 }
     const pinned = ['us:AAPL', 'us:GOOGL']
     // When 列表区降序、置顶区升序；再把两区方向对调
-    const mixed = orderSymbols({ rows, pinned, sortRows: 'pct-desc', sortPinned: 'pct-asc', pct })
-    const swapped = orderSymbols({ rows, pinned, sortRows: 'pct-asc', sortPinned: 'pct-desc', pct })
+    const mixed = orderSymbols({ rows, pinned, sortRows: 'yield-desc', sortPinned: 'yield-asc', pct })
+    const swapped = orderSymbols({ rows, pinned, sortRows: 'yield-asc', sortPinned: 'yield-desc', pct })
     // Then 两区互不影响：列表区降序 [NVDA 2, MSFT 1, TSLA 0.5]、置顶区升序 [GOOGL -4, AAPL 3]
     expect(mixed).toEqual({ pinned: ['GOOGL', 'AAPL'], rest: ['NVDA', 'MSFT', 'TSLA'] })
     // And 方向对调后各自反向，仍是两区独立
@@ -79,7 +79,7 @@ describe('orderWatchlistRows · 置顶分区', () => {
     const rows = [us('AAPL'), us('MSFT')]
     const pct: Record<string, number> = { 'us:AAPL': 1, 'us:MSFT': 2 }
     // When 切分两区
-    const result = orderSymbols({ rows, pinned: ['hk:00700', 'us:TSLA'], sortRows: 'pct-desc', pct })
+    const result = orderSymbols({ rows, pinned: ['hk:00700', 'us:TSLA'], sortRows: 'yield-desc', pct })
     // Then 置顶区为空（不为缺席的键造行），列表区两行俱在
     expect(result).toEqual({ pinned: [], rest: ['MSFT', 'AAPL'] })
   })
@@ -88,8 +88,8 @@ describe('orderWatchlistRows · 置顶分区', () => {
     // Given 一组空候选行、一组非空候选行
     const pct: Record<string, number> = { 'us:AAPL': 1 }
     // When 分别用「空 rows + 有置顶键」与「有 rows + 空置顶键」切分
-    const emptyRows = orderSymbols({ rows: [], pinned: ['us:AAPL'], sortRows: 'pct-desc', pct })
-    const emptyPinned = orderSymbols({ rows: [us('AAPL')], pinned: [], sortRows: 'pct-desc', pct })
+    const emptyRows = orderSymbols({ rows: [], pinned: ['us:AAPL'], sortRows: 'yield-desc', pct })
+    const emptyPinned = orderSymbols({ rows: [us('AAPL')], pinned: [], sortRows: 'yield-desc', pct })
     // Then 两者都是空置顶区；后者列表区保留那一行
     expect(emptyRows).toEqual({ pinned: [], rest: [] })
     expect(emptyPinned).toEqual({ pinned: [], rest: ['AAPL'] })
@@ -112,7 +112,7 @@ describe('orderWatchlistRows · 涨跌幅三态', () => {
     const rows = [us('AAPL'), us('MSFT'), us('NVDA'), us('GOOGL'), us('TSLA')]
     const pct: Record<string, number> = { 'us:AAPL': 2.5, 'us:MSFT': -1.2, 'us:NVDA': 0.4, 'us:GOOGL': 9.9, 'us:TSLA': -0.1 }
     // When 按降序排
-    const result = orderSymbols({ rows, sortRows: 'pct-desc', pct })
+    const result = orderSymbols({ rows, sortRows: 'yield-desc', pct })
     // Then 全序从高到低
     expect(result.rest).toEqual(['GOOGL', 'AAPL', 'NVDA', 'TSLA', 'MSFT'])
   })
@@ -122,7 +122,7 @@ describe('orderWatchlistRows · 涨跌幅三态', () => {
     const rows = [us('AAPL'), us('MSFT'), us('NVDA'), us('GOOGL'), us('TSLA')]
     const pct: Record<string, number> = { 'us:AAPL': 2.5, 'us:MSFT': -1.2, 'us:NVDA': 0.4, 'us:GOOGL': 9.9, 'us:TSLA': -0.1 }
     // When 按升序排
-    const result = orderSymbols({ rows, sortRows: 'pct-asc', pct })
+    const result = orderSymbols({ rows, sortRows: 'yield-asc', pct })
     // Then 全序从低到高
     expect(result.rest).toEqual(['MSFT', 'TSLA', 'NVDA', 'AAPL', 'GOOGL'])
   })
@@ -132,8 +132,8 @@ describe('orderWatchlistRows · 涨跌幅三态', () => {
     const rows = [us('AAPL'), us('MSFT'), us('NVDA'), us('GOOGL'), us('TSLA')]
     const pct: Record<string, number> = { 'us:AAPL': 2, 'us:MSFT': -3, 'us:NVDA': 1 }
     // When 分别按降序与升序排
-    const desc = orderSymbols({ rows, sortRows: 'pct-desc', pct })
-    const asc = orderSymbols({ rows, sortRows: 'pct-asc', pct })
+    const desc = orderSymbols({ rows, sortRows: 'yield-desc', pct })
+    const asc = orderSymbols({ rows, sortRows: 'yield-asc', pct })
     // Then 两个方向都把它们压在末尾，且两行之间保持存储顺序（GOOGL 在 TSLA 之前）
     expect(desc.rest).toEqual(['AAPL', 'NVDA', 'MSFT', 'GOOGL', 'TSLA'])
     expect(asc.rest).toEqual(['MSFT', 'NVDA', 'AAPL', 'GOOGL', 'TSLA'])
@@ -144,8 +144,8 @@ describe('orderWatchlistRows · 涨跌幅三态', () => {
     const rows = [us('AAPL'), us('MSFT'), us('NVDA'), us('GOOGL')]
     const pct: Record<string, number> = { 'us:AAPL': 1, 'us:MSFT': 1, 'us:NVDA': 1, 'us:GOOGL': 2 }
     // When 分别按降序与升序排
-    const desc = orderSymbols({ rows, sortRows: 'pct-desc', pct })
-    const asc = orderSymbols({ rows, sortRows: 'pct-asc', pct })
+    const desc = orderSymbols({ rows, sortRows: 'yield-desc', pct })
+    const asc = orderSymbols({ rows, sortRows: 'yield-asc', pct })
     // Then 等值三行在两个方向都保持存储顺序（不依赖引擎 sort 的稳定性）
     expect(desc.rest).toEqual(['GOOGL', 'AAPL', 'MSFT', 'NVDA'])
     expect(asc.rest).toEqual(['AAPL', 'MSFT', 'NVDA', 'GOOGL'])
@@ -157,31 +157,62 @@ describe('orderWatchlistRows · 涨跌幅三态', () => {
     const pct: Record<string, number> = { 'us:AAPL': 1, 'us:MSFT': 3, 'us:NVDA': 2 }
     const before = rows.map(row => row.symbol)
     // When 按降序排
-    orderSymbols({ rows, sortRows: 'pct-desc', pct })
+    orderSymbols({ rows, sortRows: 'yield-desc', pct })
     // Then 入参顺序原样（排序在副本上做）
     expect(rows.map(row => row.symbol)).toEqual(before)
   })
 })
 
-describe('nextSortMode（表头三态循环）', () => {
-  it('用户点表头时，排序模式按 default → pct-desc → pct-asc → default 循环', () => {
-    // Given 起始模式是默认排序
+describe('nextSortMode（表头循环）', () => {
+  it('Agent: cycles name, ticker, type, then return, and comes back to the stored order', () => {
     let mode: WatchlistSortMode = 'default'
-    // When 连点四次表头
     const steps: WatchlistSortMode[] = []
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       mode = nextSortMode(mode)
       steps.push(mode)
     }
-    // Then 三步一循环，第四步回到起点
-    expect(steps).toEqual(['pct-desc', 'pct-asc', 'default', 'pct-desc'])
+    expect(steps).toEqual(['name', 'ticker', 'type', 'yield-desc', 'yield-asc', 'default', 'name'])
   })
+})
 
-  it('用户从任意一态继续点表头时，下一个态唯一确定（无分支歧义）', () => {
-    // Given 三个可用模式
-    const modes: WatchlistSortMode[] = ['default', 'pct-desc', 'pct-asc']
-    // When 各自推进一步
-    // Then 映射固定：default→pct-desc、pct-desc→pct-asc、pct-asc→default
-    expect(modes.map(entry => nextSortMode(entry))).toEqual(['pct-desc', 'pct-asc', 'default'])
+describe('orderWatchlistRows · name, ticker and type', () => {
+  it('Agent: sorts by Russian name, ticker, then share-fund-bond', () => {
+    const rows: Instrument[] = [
+      { market: 'ru', symbol: 'SU26238', name: 'ОФЗ 26238' },
+      { market: 'ru', symbol: 'SBER', name: 'Сбербанк' },
+      { market: 'ru', symbol: 'TMOS', name: 'Тинькофф Индекс' },
+    ]
+    const listing: Record<string, 'share' | 'fund' | 'bond'> = {
+      'ru:SBER': 'share',
+      'ru:TMOS': 'fund',
+      'ru:SU26238': 'bond',
+    }
+    const byName = orderWatchlistRows({
+      rows,
+      pinned: [],
+      sort: { rows: 'name', pinned: 'default' },
+      pctOf: () => undefined,
+      keyOf,
+      listingOf: row => listing[keyOf(row)] ?? 'other',
+    })
+    expect(byName.rest.map(row => row.symbol)).toEqual(['SU26238', 'SBER', 'TMOS'])
+    const byTicker = orderWatchlistRows({
+      rows,
+      pinned: [],
+      sort: { rows: 'ticker', pinned: 'default' },
+      pctOf: () => undefined,
+      keyOf,
+      listingOf: row => listing[keyOf(row)] ?? 'other',
+    })
+    expect(byTicker.rest.map(row => row.symbol)).toEqual(['SBER', 'SU26238', 'TMOS'])
+    const byType = orderWatchlistRows({
+      rows,
+      pinned: [],
+      sort: { rows: 'type', pinned: 'default' },
+      pctOf: () => undefined,
+      keyOf,
+      listingOf: row => listing[keyOf(row)] ?? 'other',
+    })
+    expect(byType.rest.map(row => row.symbol)).toEqual(['SBER', 'TMOS', 'SU26238'])
   })
 })

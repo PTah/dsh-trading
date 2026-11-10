@@ -24,8 +24,8 @@ const POLL_MS = 300_000
 /** 日历全周条目上限（与桥/连接器侧同值；整周实测已到 254 条，250 会把周尾静默裁掉）。 */
 const CALENDAR_LIMIT = 400
 
-/** 默认地区过滤（美/日/中；用户 2026-09-15 裁决）。 */
-const G3_REGIONS: readonly string[] = ['美国', '日本', '中国'] // i18n-allow: 地区名是上游数据词汇（与条目 region 比对），非 UI 文案
+/** 默认地区：俄罗斯终端看俄罗斯、美国和中国（金十标题仍是中文地区名）。 */
+const G3_REGIONS: readonly string[] = ['俄罗斯', '美国', '中国'] // i18n-allow: 地区名是上游数据词汇（与条目 region 比对），非 UI 文案
 
 /** 单个数据源的加载状态：两源各自记账，任一源失败不影响另一个页签的展示。 */
 type FeedState = 'loading' | 'ready' | 'error'
@@ -114,6 +114,7 @@ export function MacroPanel({ t, onClose }: MacroPanelProps) {
             </button>
           </div>
         </div>
+        <p className={css.hint}>{t('macro.ruNote')}</p>
         {tab === 'calendar' ? (
           <div className={css.list}>
             <p className={css.hint}>{t('macro.weekHint')}</p>

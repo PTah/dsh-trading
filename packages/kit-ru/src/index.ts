@@ -139,3 +139,5 @@ export const providerForSkills = skillWhitelistView(provider, SKILL_CANDIDATES, 
 export function apply(ctx: Context, config: Config): void {
   registerSkillProvider(ctx, config, providerForSkills)
 }
+
+export { aggregateNews } from './news.ts'

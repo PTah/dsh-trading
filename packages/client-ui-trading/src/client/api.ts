@@ -4,7 +4,7 @@
  * carries the auth cookie by default).
  */
 import type { AccountBalance, DerivativesData, DerivativesHistory, Kline, MarketId, MarketInfo, Order, Orderbook, Position, TickerOutcome, TradeFill, TradeTick } from './types.ts'
-import type { FundamentalsPackage, InstrumentAssetClass, InstrumentForm, SouthboundHoldingHistory } from '@dshtrading/api'
+import type { FundamentalsPackage, InstrumentAssetClass, InstrumentForm, InstrumentListing, SouthboundHoldingHistory } from '@dshtrading/api'
 import type { CustomIndicatorRecord, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
 import type { KnowledgeCard } from '@dshtrading/knowledge'
 import type { CustomStrategyRecord, CustomScreenerRecord } from '@dshtrading/strategies'
@@ -293,7 +293,7 @@ export async function cancelGuiOrder(
  * 形态/资产类别随 wire 透传（2026-10-08 加密永续；P4 已在 `SymbolInfoWire` 落地），
  * 客户端据此渲染形态徽标与 TradFi 归属——**不按符号猜资产类别**。
  */
-export type SymbolInfo = { symbol: string; name?: string; form?: InstrumentForm; assetClass?: InstrumentAssetClass }
+export type SymbolInfo = { symbol: string; name?: string; form?: InstrumentForm; assetClass?: InstrumentAssetClass; listing?: InstrumentListing }
 
 export async function fetchSymbols(market: MarketId, q?: string): Promise<SymbolInfo[]> {
   const query = new URLSearchParams({ market, ...(q ? { query: q } : {}) })
@@ -1493,6 +1493,7 @@ export interface TradingBridgeService {
   fetchNews: typeof fetchNews
   fetchFlash: typeof fetchFlash
   fetchSymbols: typeof fetchSymbols
+  fetchTickers: typeof fetchTickers
   subscribeTradingEvents: typeof subscribeTradingEvents
 }
 
@@ -1515,6 +1516,7 @@ export function createTradingBridgeService(): TradingBridgeService {
     fetchNews,
     fetchFlash,
     fetchSymbols,
+    fetchTickers,
     subscribeTradingEvents,
   }
 }

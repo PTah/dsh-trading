@@ -36,6 +36,7 @@
     "@dshtrading/kit-cn": "workspace:^",
     "@dshtrading/kit-crypto": "workspace:^",
     "@dshtrading/kit-hk": "workspace:^",
+    "@dshtrading/kit-ru": "workspace:^",
     "@dshtrading/kit-us": "workspace:^",
     "@dshtrading/knowledge": "workspace:^",
     "@dshtrading/strategies": "workspace:^",

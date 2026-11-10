@@ -266,6 +266,9 @@ export function apply(ctx: ClientContext): void {
       setPinned: (key: string, pinned: boolean) => watchlistGroups.setPinned(key, pinned),
       // 排序三态循环（纯本地 UI 态；rows = 列表区，pinned = 置顶区）。
       cycleSort: (zone: 'rows' | 'pinned') => watchlistSort.cycle(zone),
+      setSort: (zone: 'rows' | 'pinned', mode: 'default' | 'name' | 'ticker' | 'type' | 'price-desc' | 'price-asc' | 'yield-desc' | 'yield-asc') => {
+        watchlistSort.setZone(zone, mode)
+      },
     }),
   }, MarketDock))
 

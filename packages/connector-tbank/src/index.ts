@@ -89,6 +89,7 @@ export function ruLiquidInstruments(): InstrumentRef[] {
     name: row.name,
     form: 'spot',
     assetClass: 'equity',
+    listing: 'share',
   }))
 }
 
@@ -225,6 +226,12 @@ export class TBankMarketDataService extends Service implements MarketDataService
   }
 
   async listInstruments(): Promise<InstrumentRef[]> {
+    try {
+      const listed = await this.client.listMoexCatalog(await this.requireCreds())
+      if (listed.length > 0) return listed
+    } catch {
+      // 没有 token 或网络失败时，侧栏仍显示离线的流动性股票子集。
+    }
     return ruLiquidInstruments()
   }
 

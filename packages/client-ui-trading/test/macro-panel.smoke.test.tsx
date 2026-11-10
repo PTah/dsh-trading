@@ -42,16 +42,18 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('MacroPanel 双源状态与地区筛选', () => {
-  it('默认只看美日中：日历与利率都按地区过滤，页签可切', async () => {
-    net.calendar = [cal('美国', '美国9月核心CPI年率'), cal('德国', '德国8月CPI年率')]
-    net.rates = [rate('日本', '日本央行'), rate('巴西', '巴西央行')]
+  it('默认只看俄罗斯、美国和中国：日历与利率都按地区过滤，页签可切', async () => {
+    net.calendar = [cal('美国', '美国9月核心CPI年率'), cal('德国', '德国8月CPI年率'), cal('俄罗斯', 'Россия ставка')]
+    net.rates = [rate('日本', '日本央行'), rate('俄罗斯', 'Банк России'), rate('巴西', '巴西央行')]
     render(<MacroPanel t={t} onClose={() => {}} />)
 
     await waitFor(() => { expect(screen.queryByText('美国9月核心CPI年率')).not.toBeNull() })
+    expect(screen.queryByText('Россия ставка')).not.toBeNull()
     expect(screen.queryByText('德国8月CPI年率')).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'macro.tab.rates' }))
-    expect(screen.queryByText('日本央行')).not.toBeNull()
+    expect(screen.queryByText('Банк России')).not.toBeNull()
+    expect(screen.queryByText('日本央行')).toBeNull()
     expect(screen.queryByText('巴西央行')).toBeNull()
   })
 

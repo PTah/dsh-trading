@@ -10,6 +10,8 @@ Status: implemented
 
 `client-ui-trading` 增加 `SIDEBAR_MARKETS = ['ru']` 与 `filterSidebarMarkets`：`/markets` 回包在侧栏页签、自选聚合、添加目标循环处按该表收窄。其它市场 bundle 仍可安装（Settings / 工具面不变），只是不进左栏。
 
+「Избранное」只渲染自选行。自选行按名册标成股票（蓝）/ 基金（紫）/ 债券（琥珀），左侧色条加短标签；未知类型不猜测。排序是表头上方标着「Сортировка」的下拉：加入顺序、名称、代码、类型、价格高低、涨跌幅高低。两个区各有自己的下拉。「Россия」渲染 T-Bank `Shares` / `Etfs` / `Bonds` 里可交易的 MOEX 板块（TQBR、TQTF/TQTD、TQOB/TQCB/TQIR/TQOD），按股票 / 基金 / 债券分组，分组默认折叠，标题上的三角展开一块。点行只选中标的；「В избранное」才写入自选。名册不参与侧栏行情轮询。连接器没有 token 或请求失败时，名册退回 `RU_LIQUID_SHARES`。
+
 ## Consequences
 
 - 要重新露出多市场：改 `SIDEBAR_MARKETS` 并重建 `@dshtrading/client-ui-trading`。

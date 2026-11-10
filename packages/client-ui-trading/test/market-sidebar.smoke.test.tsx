@@ -12,7 +12,7 @@
  *
  * @vitest-environment jsdom
  */
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MarketLocaleKey } from '../src/client/contract.ts'
 import type { SelectionState, Watchlists } from '../src/client/store.ts'
@@ -29,7 +29,8 @@ const net = vi.hoisted(() => ({
   plan: {} as Record<string, Record<string, 'unsupported' | 'missing' | 'ok'>>,
   /** 粒度 → K 线序列。 */
   series: {} as Record<string, Kline[]>,
-  markets: [] as Array<{ id: 'crypto' | 'us' | 'cn' | 'hk' }>,
+  markets: [] as Array<{ id: 'crypto' | 'us' | 'cn' | 'hk' | 'ru' }>,
+  symbols: [] as Array<{ symbol: string; name?: string; listing?: 'share' | 'fund' | 'bond' }>,
 }))
 
 vi.mock('../src/client/api.ts', async (importOriginal) => {
@@ -38,7 +39,7 @@ vi.mock('../src/client/api.ts', async (importOriginal) => {
     ...actual,
     fetchMarkets: async () => net.markets,
     // 断网桩：全集预取与在线联想一律空，序列完全由 net 决定。
-    fetchSymbols: async () => [],
+    fetchSymbols: async () => net.symbols,
     fetchTickers: async () => ({}),
     fetchKlines: async (market: MarketId, symbol: string, interval: string, limit: number): Promise<Kline[]> => {
       net.calls.push({ market, symbol, interval, limit })
@@ -64,13 +65,13 @@ function bar(openTime: number, close: number): Kline {
   return { openTime, open: close, high: close, low: close, close, volume: 0, closeTime: openTime + 60_000 }
 }
 
-// 2026-09-08（周二）美东常规时段 9:30–16:00 ET（EDT = UTC-4）内的四根 5m bar：
-// 13:30Z=9:30 ET、14:30Z=10:30 ET、16:30Z=12:30 ET、18:00Z=14:00 ET。
-const US_5M: Kline[] = [
-  bar(Date.UTC(2026, 8, 8, 13, 30), 100),
-  bar(Date.UTC(2026, 8, 8, 14, 30), 101),
-  bar(Date.UTC(2026, 8, 8, 16, 30), 102),
-  bar(Date.UTC(2026, 8, 8, 18, 0), 103),
+// 2026-09-08（周二）莫斯科主场 10:00–18:40（MSK = UTC+3）内的四根 5m bar：
+// 07:00Z=10:00、07:30Z=10:30、11:00Z=14:00、15:00Z=18:00。
+const RU_5M: Kline[] = [
+  bar(Date.UTC(2026, 8, 8, 7, 0), 100),
+  bar(Date.UTC(2026, 8, 8, 7, 30), 101),
+  bar(Date.UTC(2026, 8, 8, 11, 0), 102),
+  bar(Date.UTC(2026, 8, 8, 15, 0), 103),
 ]
 
 /** 日 K 降级序列（三根，等距铺满）。 */
@@ -80,12 +81,6 @@ const DAILY: Kline[] = [
   bar(Date.UTC(2026, 8, 8, 13, 30), 320),
 ]
 
-/** crypto 滚动 24h 的 5m 序列（两根，无 xFractions）。 */
-const CRYPTO_5M: Kline[] = [
-  bar(Date.UTC(2026, 8, 8, 1, 0), 200),
-  bar(Date.UTC(2026, 8, 8, 1, 5), 201),
-]
-
 beforeEach(() => {
   // jsdom 默认 about:blank 原点下 localStorage 不可用 → store 的读写静默降级为会话内，
   // 不会跨例残留（readJson/writeJson 自带 try/catch）。
@@ -93,6 +88,7 @@ beforeEach(() => {
   net.plan = {}
   net.series = {}
   net.markets = []
+  net.symbols = []
 })
 
 afterEach(() => {
@@ -148,93 +144,91 @@ function callsOf(symbol: string): string[] {
 
 describe('MarketSidebar 迷你走势编排冒烟', () => {
   it('1m 不支持 → 降级 5m，且 xFractions 让走势只铺满已完成时段', async () => {
-    net.markets = [{ id: 'us' }]
-    net.series = { '5m': US_5M, '1d': DAILY }
-    net.plan = { AAPL: { '1m': 'unsupported', '5m': 'ok', '1d': 'ok' } }
-    const view = renderSidebar([{ market: 'us', symbol: 'AAPL', name: '苹果' }])
+    net.markets = [{ id: 'ru' }]
+    net.series = { '5m': RU_5M, '1d': DAILY }
+    net.plan = { SBER: { '1m': 'unsupported', '5m': 'ok', '1d': 'ok' } }
+    const view = renderSidebar([{ market: 'ru', symbol: 'SBER', name: 'Сбербанк' }])
 
     // 取数编排：先 1m（被桥拒）→ 再 5m（成功）。报价拍还没落地，prevClose 的 1d×2
     // 不抢在它前面发（ticker 缺省时的兜底留到下一拍，见 market-sidebar-prevclose-seed）。
-    await waitFor(() => { expect(callsOf('AAPL')).toEqual(['1m:500', '5m:200']) })
+    await waitFor(() => { expect(callsOf('SBER')).toEqual(['1m:500', '5m:200']) })
     expect(net.calls.filter(call => call.interval === '1d' && call.limit === 2)).toHaveLength(0)
     // 5m 成功后不再走日 K 降级（limit 32 缺席）
     expect(net.calls.filter(call => call.interval === '1d' && call.limit === 32)).toHaveLength(0)
 
-    const points = sparkPoints(view.getByText, '苹果')
-    expect(points).toHaveLength(US_5M.length)
+    const points = sparkPoints(view.getByText, 'Сбербанк')
+    expect(points).toHaveLength(RU_5M.length)
     const xs = points.map(([x]) => x)
-    expect(xs[0]).toBeCloseTo(0, 5)                 // 9:30 ET 开盘 → 左边缘
-    // 14:00 ET = 270/390 时段位置；无 xFractions 时序列等距铺满，末点恰为 56
-    expect(xs[3]).toBeCloseTo((270 / 390) * 56, 1)
+    expect(xs[0]).toBeCloseTo(0, 5)                 // 10:00 MSK 开盘 → 左边缘
+    // 18:00 MSK = 480/520 时段位置；无 xFractions 时序列等距铺满，末点恰为 56
+    expect(xs[3]).toBeCloseTo((480 / 520) * 56, 1)
     expect(xs[3]).toBeLessThan(56 * 0.99)
   })
 
   it('1m 与 5m 均失败 → 降级日 K（mode daily，limit 32），走势照常渲染', async () => {
-    net.markets = [{ id: 'us' }]
+    net.markets = [{ id: 'ru' }]
     net.series = { '1d': DAILY }
-    net.plan = { MSFT: { '1m': 'unsupported', '5m': 'unsupported', '1d': 'ok' } }
-    const view = renderSidebar([{ market: 'us', symbol: 'MSFT', name: '微软' }])
+    net.plan = { GAZP: { '1m': 'unsupported', '5m': 'unsupported', '1d': 'ok' } }
+    const view = renderSidebar([{ market: 'ru', symbol: 'GAZP', name: 'Газпром' }])
 
     // 两档分钟线都试过才降日 K；日 K 的倒数第二根自带走 prevClose，不再额外补 1d×2
-    await waitFor(() => { expect(callsOf('MSFT')).toEqual(['1m:500', '5m:200', '1d:32']) })
+    await waitFor(() => { expect(callsOf('GAZP')).toEqual(['1m:500', '5m:200', '1d:32']) })
     expect(net.calls.filter(call => call.interval === '1d' && call.limit === 2)).toHaveLength(0)
 
     // 日 K 序列三根 → 等距铺满（日 K 无 xFractions）
-    const points = sparkPoints(view.getByText, '微软')
+    const points = sparkPoints(view.getByText, 'Газпром')
     expect(points).toHaveLength(DAILY.length)
     expect(points.map(([x]) => x)).toEqual([0, 28, 56])
   })
 
-  it('用户按永续形态筛选搜索时，结果只剩永续行并带 TradFi 形态徽标', async () => {
-    // Given: 交易所名册里有一行股票永续与一行同名的股票现货（动态字典注入，不走网络）
-    net.markets = [{ id: 'crypto' }]
-    setDynamicCatalog('crypto', [
-      { symbol: 'TSLAUSDT-SWAP', name: '特斯拉 永续', form: 'perp', assetClass: 'equity' },
-      { symbol: 'TSLASPOT', name: '特斯拉现货占位' },
-    ])
-    const view = renderSidebar([{ market: 'crypto', symbol: 'BTCUSDT', name: '比特币' }])
-    // When: 输入查询（全部形态）后把形态过滤切到「永续」（点击循环：全部→现货→永续）
-    const input = view.container.querySelector('input')
-    fireEvent.change(input as HTMLInputElement, { target: { value: 'TSLA' } })
-    // Then: 过滤前两行都在（现货也可见）
-    await waitFor(() => { expect(view.getByText('TSLASPOT')).toBeTruthy() })
-    expect(view.getByText('TSLAUSDT-SWAP')).toBeTruthy()
-    const filter = view.container.querySelector('button[data-form-filter]')
-    expect(filter?.getAttribute('data-form-filter')).toBe('all')
-    fireEvent.click(filter as HTMLElement)
-    fireEvent.click(filter as HTMLElement)
-    // Then: 切到永续后现货行消失、永续行带「股票合约」徽标
-    await waitFor(() => { expect(view.queryByText('TSLASPOT')).toBeNull() })
-    expect(view.getByText('TSLAUSDT-SWAP')).toBeTruthy()
-    expect(view.getByText('form.perpEquity')).toBeTruthy()
-  })
-
-  it('用户查看自选里的永续行时，行上带形态徽标（现货行不挂标）', async () => {
-    // Given: crypto 自选里一行加密永续与一行现货
-    net.markets = [{ id: 'crypto' }]
+  it('侧栏只留俄罗斯市场，加密自选行和永续筛选都不出现', async () => {
+    // Given: 桥回报了 crypto，自选里也有 BTC，但侧栏市场表只有 ru
+    net.markets = [{ id: 'crypto' }, { id: 'ru' }]
     const view = renderSidebar([
-      { market: 'crypto', symbol: 'BTCUSDT-SWAP', name: '比特币 永续' },
       { market: 'crypto', symbol: 'BTCUSDT', name: '比特币' },
+      { market: 'ru', symbol: 'SBER', name: 'Сбербанк' },
     ])
-    // When: 左栏自选列表渲染完成（市场列表经桥桩到达后才有行）
-    // Then: 只有永续行挂「永续」徽标
-    await waitFor(() => { expect(view.getAllByText('form.perp')).toHaveLength(1) })
+    // Then: 只看见俄股自选，没有加密行，也没有永续形态开关
+    await waitFor(() => { expect(view.getByText('Сбербанк')).toBeTruthy() })
+    expect(view.queryByText('比特币')).toBeNull()
+    expect(view.container.querySelector('button[data-form-filter]')).toBeNull()
   })
 
-  it('crypto 取数归一为 5m×288（滚动 24h，不出现 1m 请求），走势等距铺满', async () => {
-    net.markets = [{ id: 'crypto' }]
-    net.series = { '5m': CRYPTO_5M, '1d': DAILY }
-    net.plan = { BTCUSDT: { '5m': 'ok', '1d': 'ok' } }
-    const view = renderSidebar([{ market: 'crypto', symbol: 'BTCUSDT', name: '比特币' }])
+  it('Agent: Russia catalog sections start folded and a triangle opens one block', async () => {
+    net.markets = [{ id: 'ru' }]
+    net.symbols = [
+      { symbol: 'SBER', name: 'Сбербанк', listing: 'share' },
+      { symbol: 'TMOS', name: 'Тинькофф Индекс', listing: 'fund' },
+      { symbol: 'SU26238', name: 'ОФЗ 26238', listing: 'bond' },
+    ]
+    renderSidebar([])
+    await waitFor(() => { expect(screen.getByRole('tab', { name: 'tab.ru' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('tab', { name: 'tab.ru' }))
+    const shares = await screen.findByRole('button', { name: 'sidebar.catalog.share' })
+    expect(shares.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText('Сбербанк')).toBeNull()
+    expect(screen.queryByText('Тинькофф Индекс')).toBeNull()
+    fireEvent.click(shares)
+    expect(screen.getByRole('button', { name: 'sidebar.catalog.share' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText('Сбербанк')).toBeTruthy()
+    expect(screen.queryByText('Тинькофф Индекс')).toBeNull()
+  })
 
-    // crypto 候选只有 5m，且 intradayRequest 把 crypto 的任意候选归一为 5m×288：
-    // API 层既不出现 1m 请求，也不按股票口径 200 根取数。
-    await waitFor(() => { expect(callsOf('BTCUSDT')).toEqual(['5m:288']) })
-    expect(net.calls.some(call => call.interval === '1m')).toBe(false)
-    expect(net.calls.filter(call => call.interval === '1d' && call.limit === 2)).toHaveLength(0)
-
-    const points = sparkPoints(view.getByText, '比特币')
-    expect(points).toHaveLength(CRYPTO_5M.length)
-    expect(points.map(([x]) => x)).toEqual([0, 56])
+  it('Agent: a favorite row shows a share, fund, or bond mark from the catalog', async () => {
+    net.markets = [{ id: 'ru' }]
+    net.symbols = [
+      { symbol: 'SBER', name: 'Сбербанк', listing: 'share' },
+      { symbol: 'SU26238', name: 'ОФЗ 26238', listing: 'bond' },
+    ]
+    const view = renderSidebar([
+      { market: 'ru', symbol: 'SBER', name: 'Сбербанк' },
+      { market: 'ru', symbol: 'SU26238', name: 'ОФЗ 26238' },
+    ])
+    await waitFor(() => { expect(view.getAllByText('listing.share').length).toBeGreaterThan(0) })
+    expect(view.getAllByText('listing.bond').length).toBeGreaterThan(0)
+    const shareRow = view.getByText('Сбербанк').closest('button')
+    const bondRow = view.getByText('ОФЗ 26238').closest('button')
+    expect(shareRow?.getAttribute('data-listing')).toBe('share')
+    expect(bondRow?.getAttribute('data-listing')).toBe('bond')
   })
 })

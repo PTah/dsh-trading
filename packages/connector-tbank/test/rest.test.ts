@@ -10,6 +10,8 @@ import {
 } from '../src/index.js'
 import {
   INTERVAL_MAX_WINDOW_MS,
+  bondQuoteFromParts,
+  moexRowsFromInstruments,
   TBankRestClient,
   TradingServiceError,
 } from '../src/rest.js'
@@ -25,6 +27,29 @@ describe('T-Bank RU liquid universe', () => {
     expect(new Set(symbols).size).toBe(symbols.length)
     expect(listed).toHaveLength(symbols.length)
     expect(listed[0]?.assetClass).toBe('equity')
+    expect(listed[0]?.listing).toBe('share')
+  })
+})
+
+describe('T-Bank MOEX catalog boards', () => {
+  it('Agent: keeps tradable TQBR shares and drops other boards', async () => {
+    // Given a Shares payload that mixes the main board with a foreign board
+    const rows = moexRowsFromInstruments([
+      { ticker: 'sber', classCode: 'TQBR', name: 'Сбербанк', apiTradeAvailableFlag: true },
+      { ticker: 'AAPL', classCode: 'SPBXM', name: 'Apple', apiTradeAvailableFlag: true },
+      { ticker: 'GAZP', classCode: 'TQBR', name: 'Газпром', apiTradeAvailableFlag: false },
+    ], 'share')
+    // Then only the tradable main-board share remains
+    expect(rows.map((row) => row.symbol)).toEqual(['SBER'])
+    expect(rows[0]?.listing).toBe('share')
+  })
+
+  it('Agent: turns a bond percent price and NKD into the cash paid at purchase', () => {
+    // Given a 96.5% quote on a 1000 face and 18.4 of accrued coupon
+    const quote = bondQuoteFromParts(96.5, 1000, 18.4)
+    // Then the buyer pays the clean price plus NKD
+    expect(quote?.clean).toBeCloseTo(965, 6)
+    expect(quote?.dirty).toBeCloseTo(983.4, 6)
   })
 })
 

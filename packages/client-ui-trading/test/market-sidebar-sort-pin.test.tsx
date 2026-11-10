@@ -140,16 +140,16 @@ interface Harness {
  * 调用记录，用于断言「到底走了哪条写路径」）。
  */
 function mountSidebar(rows: RowSpec[], pinned: string[] = [], registry: WatchlistGroupMeta[] = []): Harness {
-  bridge.markets = ['us']
+  bridge.markets = ['ru']
   for (const row of rows) {
-    bridge.quotes.set(`us:${row.symbol}`, { price: row.price, prevClose: PREV_CLOSE, name: row.name })
+    bridge.quotes.set(`ru:${row.symbol}`, { price: row.price, prevClose: PREV_CLOSE, name: row.name })
   }
   // 三个 store 都会水合 localStorage，可能带着上一条用例的残留：一律覆盖成本用例的
   // 唯一真相（自选行及其归属 / 分组注册表与置顶键集 / 两区排序），用例之间互不影响。
   const watchlists = createWatchlistStore()
   watchlists.applyHost({
-    us: rows.map(row => ({
-      market: 'us' as const,
+    ru: rows.map(row => ({
+      market: 'ru' as const,
       symbol: row.symbol,
       name: row.name,
       ...(row.groups === undefined ? {} : { groups: row.groups }),
@@ -195,6 +195,7 @@ function mountSidebar(rows: RowSpec[], pinned: string[] = [], registry: Watchlis
         cycleCalls.push(zone)
         return sort.cycle(zone)
       }}
+      setSort={(zone, mode) => { sort.setZone(zone, mode) }}
     />,
   )
   return { container: view.container, groups, sort, selectCalls, pinCalls, cycleCalls, removeCalls, memberCalls }
@@ -283,27 +284,27 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
       { symbol: 'MSFT', price: 90, name: '微软' },
     ])
     await waitFor(() => { expect(pctTexts(harness.container)).toEqual(['-5.00%', '+10.00%', '-10.00%']) })
-    expect(rowKeys(harness.container)).toEqual(['us:TSLA', 'us:AAPL', 'us:MSFT'])
+    expect(rowKeys(harness.container)).toEqual(['ru:TSLA', 'ru:AAPL', 'ru:MSFT'])
     expect(harness.container.querySelector('[data-pinned-header]')).toBeNull()
 
     // When: 点第二行（苹果）的置顶开关
-    fireEvent.click(pinToggle(harness.container, 'us:AAPL'))
+    fireEvent.click(pinToggle(harness.container, 'ru:AAPL'))
 
     // Then: 苹果进置顶分区（标题行之后、带 data-pinned），列表区不再有它
-    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['us:AAPL']) })
+    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:AAPL']) })
     const header = harness.container.querySelector<HTMLElement>('[data-pinned-header]')
     expect(header).not.toBeNull()
     expect(header?.textContent).toContain('pinned.title')
     expect(header?.querySelector('[data-sort-zone="pinned"]')).not.toBeNull()
-    const pinnedRow = harness.container.querySelector<HTMLElement>('[data-row-key="us:AAPL"]')
+    const pinnedRow = harness.container.querySelector<HTMLElement>('[data-row-key="ru:AAPL"]')
     expect(pinnedRow?.getAttribute('data-pinned')).toBe('true')
     expect(isBefore(header as HTMLElement, pinnedRow as HTMLElement)).toBe(true)
-    expect(rowKeys(harness.container, 'rest')).toEqual(['us:TSLA', 'us:MSFT'])
+    expect(rowKeys(harness.container, 'rest')).toEqual(['ru:TSLA', 'ru:MSFT'])
     // 且两组之间的分隔线正好落在置顶行与列表区首行之间
     const divider = harness.container.querySelector<HTMLElement>('[data-pinned-divider="true"]')
     expect(divider).not.toBeNull()
     expect(isBefore(pinnedRow as HTMLElement, divider as HTMLElement)).toBe(true)
-    expect(isBefore(divider as HTMLElement, harness.container.querySelector('[data-row-key="us:TSLA"]') as HTMLElement)).toBe(true)
+    expect(isBefore(divider as HTMLElement, harness.container.querySelector('[data-row-key="ru:TSLA"]') as HTMLElement)).toBe(true)
   })
 
   it('用户应该在循环点击列表表头时，依次切到涨幅从高到低、从低到高再回到默认顺序', async () => {
@@ -316,58 +317,40 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
     await waitFor(() => { expect(pctTexts(harness.container)).toEqual(['-5.00%', '+10.00%', '-10.00%']) })
     const button = () => sortButton(harness.container, 'rows')
     expect(button().getAttribute('data-sort-mode')).toBe('default')
-    expect(button().getAttribute('aria-label')).toBe('sort.default')
-    expect(button().querySelector('svg')).toBeNull()
+    expect(button().getAttribute('aria-label')).toBe('sort.label')
 
-    // When: 第一次点击
-    fireEvent.click(button())
-    // Then: 涨幅从高到低（+10 / -5 / -10），模式与读屏文案同步，方向箭头出现
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:TSLA', 'us:MSFT']) })
-    expect(button().getAttribute('data-sort-mode')).toBe('pct-desc')
-    expect(button().getAttribute('aria-label')).toBe('sort.pctDesc')
-    expect(button().getAttribute('title')).toBe('sort.pctDesc')
-    expect(button().querySelector('svg')).not.toBeNull()
+    fireEvent.change(button(), { target: { value: 'name' } })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:MSFT', 'ru:TSLA', 'ru:AAPL']) })
+    expect(button().getAttribute('data-sort-mode')).toBe('name')
 
-    // When: 第二次点击
-    fireEvent.click(button())
-    // Then: 涨幅从低到高（-10 / -5 / +10）
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:MSFT', 'us:TSLA', 'us:AAPL']) })
-    expect(button().getAttribute('data-sort-mode')).toBe('pct-asc')
-    expect(button().getAttribute('aria-label')).toBe('sort.pctAsc')
+    fireEvent.change(button(), { target: { value: 'ticker' } })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT', 'ru:TSLA']) })
+    expect(button().getAttribute('data-sort-mode')).toBe('ticker')
 
-    // When: 第三次点击
-    fireEvent.click(button())
-    // Then: 回到默认（存储）顺序，箭头收起
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:TSLA', 'us:AAPL', 'us:MSFT']) })
-    expect(button().getAttribute('data-sort-mode')).toBe('default')
-    expect(button().querySelector('svg')).toBeNull()
+    fireEvent.change(button(), { target: { value: 'yield-desc' } })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:TSLA', 'ru:MSFT']) })
+    expect(button().getAttribute('data-sort-mode')).toBe('yield-desc')
   })
 
   it('用户应该只在所点的那个排序区生效，置顶区与列表区排序彼此独立', async () => {
     // Given: 三行置顶（存储顺序 -5 / -10 / +10）+ 两行列表（+5 / +8），两区都还是默认顺序
-    const harness = mountSidebar(FIVE_ROWS, ['us:TSLA', 'us:MSFT', 'us:AAPL'])
+    const harness = mountSidebar(FIVE_ROWS, ['ru:TSLA', 'ru:MSFT', 'ru:AAPL'])
     await waitFor(() => { expect(pctTexts(harness.container).filter(text => text !== '')).toHaveLength(5) })
-    expect(rowKeys(harness.container, 'pinned')).toEqual(['us:TSLA', 'us:MSFT', 'us:AAPL'])
-    expect(rowKeys(harness.container, 'rest')).toEqual(['us:NVDA', 'us:AMZN'])
+    expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:TSLA', 'ru:MSFT', 'ru:AAPL'])
+    expect(rowKeys(harness.container, 'rest')).toEqual(['ru:NVDA', 'ru:AMZN'])
 
-    // When: 只点列表区表头一次（切到涨幅从高到低）
-    fireEvent.click(sortButton(harness.container, 'rows'))
+    fireEvent.change(sortButton(harness.container, 'rows'), { target: { value: 'name' } })
 
-    // Then: 列表区按涨跌幅重排（+8 在 +5 前面），置顶区保持默认顺序
-    await waitFor(() => { expect(rowKeys(harness.container, 'rest')).toEqual(['us:AMZN', 'us:NVDA']) })
-    expect(rowKeys(harness.container, 'pinned')).toEqual(['us:TSLA', 'us:MSFT', 'us:AAPL'])
+    await waitFor(() => { expect(rowKeys(harness.container, 'rest')).toEqual(['ru:AMZN', 'ru:NVDA']) })
+    expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:TSLA', 'ru:MSFT', 'ru:AAPL'])
     expect(sortButton(harness.container, 'pinned').getAttribute('data-sort-mode')).toBe('default')
 
-    // When: 只点置顶区排序按钮两次（默认 → 涨幅降序 → 涨幅升序）
-    fireEvent.click(sortButton(harness.container, 'pinned'))
-    fireEvent.click(sortButton(harness.container, 'pinned'))
+    fireEvent.change(sortButton(harness.container, 'pinned'), { target: { value: 'ticker' } })
 
-    // Then: 置顶区按升序重排（-10 / -5 / +10），列表区仍是它自己的降序结果
-    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['us:MSFT', 'us:TSLA', 'us:AAPL']) })
-    expect(rowKeys(harness.container, 'rest')).toEqual(['us:AMZN', 'us:NVDA'])
-    expect(sortButton(harness.container, 'rows').getAttribute('data-sort-mode')).toBe('pct-desc')
-    expect(sortButton(harness.container, 'pinned').getAttribute('data-sort-mode')).toBe('pct-asc')
-    expect(harness.cycleCalls).toEqual(['rows', 'pinned', 'pinned'])
+    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:AAPL', 'ru:MSFT', 'ru:TSLA']) })
+    expect(rowKeys(harness.container, 'rest')).toEqual(['ru:AMZN', 'ru:NVDA'])
+    expect(sortButton(harness.container, 'rows').getAttribute('data-sort-mode')).toBe('name')
+    expect(sortButton(harness.container, 'pinned').getAttribute('data-sort-mode')).toBe('ticker')
   })
 
   it('用户应该点行内置顶开关时调用注入的 setPinned，且不触发该行的选中回调', async () => {
@@ -376,8 +359,8 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
       { symbol: 'AAPL', price: 110, name: '苹果' },
       { symbol: 'MSFT', price: 90, name: '微软' },
     ])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT']) })
-    const toggle = pinToggle(harness.container, 'us:AAPL')
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT']) })
+    const toggle = pinToggle(harness.container, 'ru:AAPL')
     expect(toggle.getAttribute('aria-pressed')).toBe('false')
     expect(toggle.getAttribute('aria-label')).toBe('row.pin')
     expect(toggle.getAttribute('title')).toBe('row.pin')
@@ -386,19 +369,19 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
     fireEvent.click(toggle)
 
     // Then: 注入的写路径收到 (key, true)，行的选中回调一次都没被调用
-    await waitFor(() => { expect(harness.pinCalls).toEqual([{ key: 'us:AAPL', pinned: true }]) })
+    await waitFor(() => { expect(harness.pinCalls).toEqual([{ key: 'ru:AAPL', pinned: true }]) })
     expect(harness.selectCalls).toEqual([])
-    expect(harness.groups.getSnapshot().pinned).toEqual(['us:AAPL'])
+    expect(harness.groups.getSnapshot().pinned).toEqual(['ru:AAPL'])
     // 且开关自身翻成「已置顶」：aria-pressed 与文案同步
-    await waitFor(() => { expect(pinToggle(harness.container, 'us:AAPL').getAttribute('aria-pressed')).toBe('true') })
-    expect(pinToggle(harness.container, 'us:AAPL').getAttribute('aria-label')).toBe('row.unpin')
+    await waitFor(() => { expect(pinToggle(harness.container, 'ru:AAPL').getAttribute('aria-pressed')).toBe('true') })
+    expect(pinToggle(harness.container, 'ru:AAPL').getAttribute('aria-label')).toBe('row.unpin')
 
     // When: 再点一次取消置顶
-    fireEvent.click(pinToggle(harness.container, 'us:AAPL'))
+    fireEvent.click(pinToggle(harness.container, 'ru:AAPL'))
 
     // Then: 写路径收到 (key, false)，行回到列表区
-    await waitFor(() => { expect(harness.pinCalls).toEqual([{ key: 'us:AAPL', pinned: true }, { key: 'us:AAPL', pinned: false }]) })
-    await waitFor(() => { expect(rowKeys(harness.container, 'rest')).toEqual(['us:AAPL', 'us:MSFT']) })
+    await waitFor(() => { expect(harness.pinCalls).toEqual([{ key: 'ru:AAPL', pinned: true }, { key: 'ru:AAPL', pinned: false }]) })
+    await waitFor(() => { expect(rowKeys(harness.container, 'rest')).toEqual(['ru:AAPL', 'ru:MSFT']) })
     expect(harness.container.querySelector('[data-pinned-header]')).toBeNull()
     expect(harness.selectCalls).toEqual([])
   })
@@ -412,17 +395,10 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
     ])
     await waitFor(() => { expect(pctTexts(harness.container)).toEqual(['-5.00%', '+10.00%', '-10.00%']) })
 
-    // When: 切到美股市场页签，再点一次列表区排序按钮
-    const usTab = Array.from(harness.container.querySelectorAll<HTMLElement>('[role="tab"]'))
-      .find(tab => tab.textContent === 'tab.us')
-    fireEvent.click(usTab as HTMLElement)
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:TSLA', 'us:AAPL', 'us:MSFT']) })
-    fireEvent.click(sortButton(harness.container, 'rows'))
+    fireEvent.change(sortButton(harness.container, 'rows'), { target: { value: 'name' } })
 
-    // Then: 市场页签下同样按涨幅从高到低重排（排序与视图无关）
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:TSLA', 'us:MSFT']) })
-    expect(sortButton(harness.container, 'rows').getAttribute('data-sort-mode')).toBe('pct-desc')
-    expect(harness.cycleCalls).toEqual(['rows'])
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:MSFT', 'ru:TSLA', 'ru:AAPL']) })
+    expect(sortButton(harness.container, 'rows').getAttribute('data-sort-mode')).toBe('name')
   })
 
   it('用户应该在没有置顶标的时，看不到置顶标题行与分隔线', async () => {
@@ -443,10 +419,10 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
     const harness = mountSidebar([
       { symbol: 'AAPL', price: 110, name: '苹果' },
       { symbol: 'MSFT', price: 90, name: '微软' },
-    ], ['us:AAPL', 'us:MSFT'])
+    ], ['ru:AAPL', 'ru:MSFT'])
 
     // When: 侧栏渲染完成
-    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['us:AAPL', 'us:MSFT']) })
+    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:AAPL', 'ru:MSFT']) })
 
     // Then: 置顶标题在、分隔线不在（两组都非空才画线），列表区没有任何行
     expect(harness.container.querySelector('[data-pinned-header]')).not.toBeNull()
@@ -460,8 +436,8 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
       { symbol: 'AAPL', price: 110, name: '苹果' },
       { symbol: 'MSFT', price: 90, name: '微软' },
     ])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT']) })
-    const toggle = pinToggle(harness.container, 'us:AAPL')
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT']) })
+    const toggle = pinToggle(harness.container, 'ru:AAPL')
     toggle.focus()
     expect(document.activeElement).toBe(toggle)
 
@@ -469,23 +445,23 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
     fireEvent.keyDown(toggle, { key: 'Enter' })
 
     // Then: 写路径收到 (key, true)，行进了置顶区，焦点落在同一行重建后的开关上而不是 body
-    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['us:AAPL']) })
-    expect(harness.pinCalls).toEqual([{ key: 'us:AAPL', pinned: true }])
-    expect(pinToggle(harness.container, 'us:AAPL').getAttribute('aria-pressed')).toBe('true')
-    await waitFor(() => { expect(document.activeElement).toBe(pinToggle(harness.container, 'us:AAPL')) })
+    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:AAPL']) })
+    expect(harness.pinCalls).toEqual([{ key: 'ru:AAPL', pinned: true }])
+    expect(pinToggle(harness.container, 'ru:AAPL').getAttribute('aria-pressed')).toBe('true')
+    await waitFor(() => { expect(document.activeElement).toBe(pinToggle(harness.container, 'ru:AAPL')) })
 
     // When: 再按一次空格取消置顶（该行搬回列表区，同样重建）
-    const pinnedToggle = pinToggle(harness.container, 'us:AAPL')
+    const pinnedToggle = pinToggle(harness.container, 'ru:AAPL')
     pinnedToggle.focus()
     fireEvent.keyDown(pinnedToggle, { key: ' ' })
 
     // Then: 两次写路径都记下，焦点跟着行回到列表区的开关上
-    await waitFor(() => { expect(rowKeys(harness.container, 'rest')).toEqual(['us:AAPL', 'us:MSFT']) })
+    await waitFor(() => { expect(rowKeys(harness.container, 'rest')).toEqual(['ru:AAPL', 'ru:MSFT']) })
     expect(harness.pinCalls).toEqual([
-      { key: 'us:AAPL', pinned: true },
-      { key: 'us:AAPL', pinned: false },
+      { key: 'ru:AAPL', pinned: true },
+      { key: 'ru:AAPL', pinned: false },
     ])
-    await waitFor(() => { expect(document.activeElement).toBe(pinToggle(harness.container, 'us:AAPL')) })
+    await waitFor(() => { expect(document.activeElement).toBe(pinToggle(harness.container, 'ru:AAPL')) })
   })
 
   it('用户应该用鼠标点置顶开关时，不把焦点抢到开关上', async () => {
@@ -494,15 +470,15 @@ describe('MarketSidebar 置顶分区与涨跌幅排序', () => {
       { symbol: 'AAPL', price: 110, name: '苹果' },
       { symbol: 'MSFT', price: 90, name: '微软' },
     ])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT']) })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT']) })
     expect(document.activeElement).toBe(document.body)
 
     // When: 用鼠标点苹果行的置顶开关
-    fireEvent.click(pinToggle(harness.container, 'us:AAPL'))
+    fireEvent.click(pinToggle(harness.container, 'ru:AAPL'))
 
     // Then: 行照样进置顶区，但焦点没被搬到重建后的开关上（只有键盘激活才恢复）
-    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['us:AAPL']) })
-    expect(pinToggle(harness.container, 'us:AAPL').getAttribute('aria-pressed')).toBe('true')
+    await waitFor(() => { expect(rowKeys(harness.container, 'pinned')).toEqual(['ru:AAPL']) })
+    expect(pinToggle(harness.container, 'ru:AAPL').getAttribute('aria-pressed')).toBe('true')
     expect(document.activeElement).toBe(document.body)
   })
 })
@@ -515,19 +491,19 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
       [],
       [GROUP_TECH],
     )
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL']) })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL']) })
     fireEvent.click(titleDropdown(harness.container))
     fireEvent.click(menuItem(harness.container, GROUP_TECH.name))
     await waitFor(() => { expect(harness.groups.getSnapshot().activeGroupId).toBe(GROUP_TECH.id) })
     // 分组视图下 ✕ 的语义变了：文案与分支一起切换
-    expect(rowAction(harness.container, 'us:AAPL', 'group.remove').getAttribute('title')).toBe('group.remove')
+    expect(rowAction(harness.container, 'ru:AAPL', 'group.remove').getAttribute('title')).toBe('group.remove')
 
     // When: 点该行的 ✕
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'group.remove'))
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'group.remove'))
 
     // Then: 只走分组写路径 member=false（带行名），移出自选的写路径一次都没调，也没选中行
     expect(harness.memberCalls).toEqual([
-      { id: GROUP_TECH.id, market: 'us', symbol: 'AAPL', member: false, name: '苹果' },
+      { id: GROUP_TECH.id, market: 'ru', symbol: 'AAPL', member: false, name: '苹果' },
     ])
     expect(harness.removeCalls).toEqual([])
     expect(harness.selectCalls).toEqual([])
@@ -539,15 +515,15 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
       { symbol: 'AAPL', price: 110, name: '苹果', groups: [GROUP_TECH.id] },
       { symbol: 'MSFT', price: 90, name: '微软' },
     ], [], [GROUP_TECH])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT']) })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT']) })
     expect(harness.groups.getSnapshot().activeGroupId).toBeNull()
-    expect(rowAction(harness.container, 'us:AAPL', 'row.remove').getAttribute('title')).toBe('row.remove')
+    expect(rowAction(harness.container, 'ru:AAPL', 'row.remove').getAttribute('title')).toBe('row.remove')
 
     // When: 点苹果行的 ✕
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'row.remove'))
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'row.remove'))
 
     // Then: 走移出自选的写路径，分组写路径一次都没调，也没选中行
-    expect(harness.removeCalls).toEqual([{ market: 'us', symbol: 'AAPL' }])
+    expect(harness.removeCalls).toEqual([{ market: 'ru', symbol: 'AAPL' }])
     expect(harness.memberCalls).toEqual([])
     expect(harness.selectCalls).toEqual([])
   })
@@ -558,18 +534,18 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
       { symbol: 'AAPL', price: 110, name: '苹果', groups: [GROUP_TECH.id] },
       { symbol: 'MSFT', price: 90, name: '微软' },
     ], [], [GROUP_TECH, GROUP_DIVIDEND])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT']) })
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT']) })
     expect(document.body.querySelector('[role="menu"]')).toBeNull()
     // 未展开：触发器声明弹的是菜单，且展开态是 false
-    const trigger = rowAction(harness.container, 'us:AAPL', 'row.group')
+    const trigger = rowAction(harness.container, 'ru:AAPL', 'row.group')
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
 
     // When: 点苹果行的分组按钮
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'row.group'))
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'row.group'))
 
     // Then: 展开态挂在触发器上（弹层已不在它的 DOM 邻位，读屏只能靠 aria-expanded）
-    expect(rowAction(harness.container, 'us:AAPL', 'row.group').getAttribute('aria-expanded')).toBe('true')
+    expect(rowAction(harness.container, 'ru:AAPL', 'row.group').getAttribute('aria-expanded')).toBe('true')
 
     // Then: 弹层 portal 到 document.body——行本身是 <button role="option">，弹层自带
     // <button>（关闭 + 逐组勾选），所以它必须不在任何 <button> 内部（合法 DOM 的结构不变式）
@@ -579,7 +555,7 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
     expect(popover.closest('button')).toBeNull()
 
     // Then: 原行里不再有菜单（内联渲染已换成 portal），整页仍只有这一个菜单
-    expect(harness.container.querySelector('[data-row-key="us:AAPL"] [role="menu"]')).toBeNull()
+    expect(harness.container.querySelector('[data-row-key="ru:AAPL"] [role="menu"]')).toBeNull()
     expect(document.body.querySelectorAll('[role="menu"]')).toHaveLength(1)
 
     // Then: 两个分组按已归属/未归属标注，且不触发行选中
@@ -599,11 +575,11 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
     expect(document.body.querySelector('[role="menu"]')).not.toBeNull()
 
     // When: 再点一次同一个分组按钮
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'row.group'))
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'row.group'))
 
     // Then: 弹层收起，body 里也不再有菜单，触发器的展开态回到 false
     expect(document.body.querySelector('[role="menu"]')).toBeNull()
-    expect(rowAction(harness.container, 'us:AAPL', 'row.group').getAttribute('aria-expanded')).toBe('false')
+    expect(rowAction(harness.container, 'ru:AAPL', 'row.group').getAttribute('aria-expanded')).toBe('false')
   })
 
   it('用户应该按 Escape 时收起行内分组归属弹层', async () => {
@@ -611,8 +587,8 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
     const harness = mountSidebar([
       { symbol: 'AAPL', price: 110, name: '苹果', groups: [GROUP_TECH.id] },
     ], [], [GROUP_TECH, GROUP_DIVIDEND])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL']) })
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'row.group'))
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL']) })
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'row.group'))
     const popover = document.body.querySelector<HTMLElement>('[role="menu"]')
     if (popover === null) throw new Error('missing row group popover')
     const checkbox = popover.querySelector<HTMLElement>('[role="menuitemcheckbox"]')
@@ -631,11 +607,11 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
     const harness = mountSidebar([
       { symbol: 'AAPL', price: 110, name: '苹果', groups: [GROUP_TECH.id] },
     ], [], [GROUP_TECH, GROUP_DIVIDEND])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL']) })
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'row.group'))
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL']) })
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'row.group'))
     expect(document.body.querySelector('[role="menu"]')).not.toBeNull()
-    const row = harness.container.querySelector<HTMLElement>('[data-row-key="us:AAPL"]')
-    if (row === null) throw new Error('missing row: us:AAPL')
+    const row = harness.container.querySelector<HTMLElement>('[data-row-key="ru:AAPL"]')
+    if (row === null) throw new Error('missing row: ru:AAPL')
 
     // When: 按在弹层外面的行上（外点判定走的是弹层自己的 ref，与 portal 位置无关）
     fireEvent.pointerDown(row)
@@ -650,18 +626,18 @@ describe('MarketSidebar 行内动作（✕ 与分组归属）', () => {
       { symbol: 'AAPL', price: 110, name: '苹果', groups: [GROUP_TECH.id] },
       { symbol: 'MSFT', price: 90, name: '微软' },
     ], [], [GROUP_TECH, GROUP_DIVIDEND])
-    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT']) })
-    fireEvent.click(rowAction(harness.container, 'us:AAPL', 'row.group'))
+    await waitFor(() => { expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT']) })
+    fireEvent.click(rowAction(harness.container, 'ru:AAPL', 'row.group'))
     expect(document.body.querySelector('[role="menu"]')).not.toBeNull()
-    const row = harness.container.querySelector<HTMLElement>('[data-row-key="us:AAPL"]')
-    if (row === null) throw new Error('missing row: us:AAPL')
+    const row = harness.container.querySelector<HTMLElement>('[data-row-key="ru:AAPL"]')
+    if (row === null) throw new Error('missing row: ru:AAPL')
 
     // When: 列表里发生滚动（scroll 不冒泡，只有捕获阶段的监听收得到）
     fireEvent.scroll(row)
 
     // Then: 浮层收起——它不会跟着行重定位，与行走脱不如收起来；自选行本身原样还在
     expect(document.body.querySelector('[role="menu"]')).toBeNull()
-    expect(rowKeys(harness.container)).toEqual(['us:AAPL', 'us:MSFT'])
-    expect(rowAction(harness.container, 'us:AAPL', 'row.group').getAttribute('aria-expanded')).toBe('false')
+    expect(rowKeys(harness.container)).toEqual(['ru:AAPL', 'ru:MSFT'])
+    expect(rowAction(harness.container, 'ru:AAPL', 'row.group').getAttribute('aria-expanded')).toBe('false')
   })
 })

@@ -43,6 +43,7 @@ interface BridgeService {
   fetchKlines(market: string, symbol: string, interval: string, limit: number): Promise<unknown[]>
   fetchCustomStrategies(): Promise<Array<Record<string, unknown>>>
   fetchSymbols(market: string): Promise<Array<{ symbol: string; name?: string }>>
+  fetchTickers?(market: string, symbols: string[]): Promise<Record<string, { ok?: boolean; ticker?: { bond?: { nominal: number; aci: number; pricePercent: number; clean: number; dirty: number } } }>>
   subscribeTradingEvents(handlers: Record<string, () => void>): () => void
   // 策略管理面（2026-09-07；老 shell 缺席 → 视图管理动作降级隐藏）。
   saveCustomStrategy?(input: StrategyEditorSaveInput): Promise<{ ok: true } | { ok: false; reason: string } | null>
@@ -73,6 +74,7 @@ export function apply(ctx: ClientContext): void {
         faces.tradingBridge.fetchCustomStrategies() as never,
       fetchSymbols: (market) =>
         faces.tradingBridge.fetchSymbols(market) as never,
+      fetchTickers: faces.tradingBridge.fetchTickers?.bind(faces.tradingBridge),
       subscribeTradingEvents: (handlers) => faces.tradingBridge.subscribeTradingEvents(handlers),
       // 管理面透传（可选：老 shell 缺席时方法为 undefined，视图据此降级）。
       saveCustomStrategy: faces.tradingBridge.saveCustomStrategy?.bind(faces.tradingBridge),

@@ -27,12 +27,11 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type { FoldStore } from './fold-store.ts'
 import type { RightbarStore } from './rightbar-store.ts'
 import { holdingsPanelStore, setHoldingsPanelOpen } from './holdings-store.ts'
-import { IconClock, IconFlash, IconFolder, IconFoldPanel, IconGlobe, IconNewSession, IconPrediction, IconWallet } from './icons.tsx'
+import { IconClock, IconFlash, IconFolder, IconFoldPanel, IconGlobe, IconNewSession, IconWallet } from './icons.tsx'
 import { ScheduledTasksPanel } from './ScheduledTasksPanel.tsx'
 import { HoldingsPanel } from './HoldingsPanel.tsx'
 import { FlashPanel } from './FlashPanel.tsx'
 import { MacroPanel } from './MacroPanel.tsx'
-import { PolymarketPanel } from './PolymarketPanel.tsx'
 import css from './session-rail.module.css'
 
 export interface SessionRailInjected {
@@ -63,9 +62,6 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
   const [flashOpen, setFlashOpen] = useState(false)
   // 宏观/利率页签（功能页签 4 号，2026-09-15）：金十经济数据+央行利率；与其余页签互斥。
   const [macroOpen, setMacroOpen] = useState(false)
-  // 预测市场页签（功能页签 6 号，2026-10-11）：Polymarket FOMC 决议档位隐含概率；
-  // 与其余页签互斥（六者同容器二选一）。
-  const [predictionOpen, setPredictionOpen] = useState(false)
   // 文件页签（功能页签 5 号，2026-09-15）：宿主右侧栏 dock 展开态的镜像
   // （rightbar-store），不是本组件的私有开关——宿主侧入口同样点亮/熄灭。
   const filesOpen = useRightbar(value => value)
@@ -100,45 +96,34 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
     return () => { delete document.body.dataset.dshtradingFilesOpen }
   }, [filesOpen])
 
+  // 互斥联动：资产面板打开 → 收定时任务/快讯/宏观并收起宿主右侧栏。
   useEffect(() => {
-    document.body.dataset.dshtradingPredictionOpen = predictionOpen ? 'on' : 'off'
-    return () => { delete document.body.dataset.dshtradingPredictionOpen }
-  }, [predictionOpen])
-
-  // 互斥联动（六页签共用同一容器）：资产面板打开（含 QuoteStage 下单成功
-  // 的跨树联动）→ 收定时任务/快讯/宏观/预测市场并收起宿主右侧栏。
-  useEffect(() => {
-    if (holdingsOpen) { setTasksOpen(false); setFlashOpen(false); setMacroOpen(false); setPredictionOpen(false); collapseRightbar() }
+    if (holdingsOpen) { setTasksOpen(false); setFlashOpen(false); setMacroOpen(false); collapseRightbar() }
   }, [holdingsOpen])
 
-  // 宿主右侧栏展开（含宿主侧打开，如对话内文件链接）→ 收定时任务/资产/快讯/宏观/预测市场。
+  // 宿主右侧栏展开（含宿主侧打开，如对话内文件链接）→ 收定时任务/资产/快讯/宏观。
   useEffect(() => {
-    if (filesOpen) { setTasksOpen(false); setHoldingsPanelOpen(false); setFlashOpen(false); setMacroOpen(false); setPredictionOpen(false) }
+    if (filesOpen) { setTasksOpen(false); setHoldingsPanelOpen(false); setFlashOpen(false); setMacroOpen(false) }
   }, [filesOpen])
 
   const toggleTasks = (next: boolean): void => {
     setTasksOpen(next)
-    if (next) { setHoldingsPanelOpen(false); setFlashOpen(false); setMacroOpen(false); setPredictionOpen(false); collapseRightbar() }
+    if (next) { setHoldingsPanelOpen(false); setFlashOpen(false); setMacroOpen(false); collapseRightbar() }
   }
 
   const toggleFlash = (next: boolean): void => {
     setFlashOpen(next)
-    if (next) { setTasksOpen(false); setHoldingsPanelOpen(false); setMacroOpen(false); setPredictionOpen(false); collapseRightbar() }
+    if (next) { setTasksOpen(false); setHoldingsPanelOpen(false); setMacroOpen(false); collapseRightbar() }
   }
 
   const toggleMacro = (next: boolean): void => {
     setMacroOpen(next)
-    if (next) { setTasksOpen(false); setHoldingsPanelOpen(false); setFlashOpen(false); setPredictionOpen(false); collapseRightbar() }
-  }
-
-  const togglePrediction = (next: boolean): void => {
-    setPredictionOpen(next)
-    if (next) { setTasksOpen(false); setHoldingsPanelOpen(false); setFlashOpen(false); setMacroOpen(false); collapseRightbar() }
+    if (next) { setTasksOpen(false); setHoldingsPanelOpen(false); setFlashOpen(false); collapseRightbar() }
   }
 
   const toggleHoldings = (next: boolean): void => {
     setHoldingsPanelOpen(next)
-    if (next) { setTasksOpen(false); setFlashOpen(false); setMacroOpen(false); setPredictionOpen(false); collapseRightbar() }
+    if (next) { setTasksOpen(false); setFlashOpen(false); setMacroOpen(false); collapseRightbar() }
   }
 
   /**
@@ -151,7 +136,6 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
     setTasksOpen(false)
     setFlashOpen(false)
     setMacroOpen(false)
-    setPredictionOpen(false)
     setHoldingsPanelOpen(false)
     collapseRightbar()
   }
@@ -235,18 +219,6 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
       >
         <IconFolder size={16} />
       </button>
-      {/* 预测市场页签（功能页签 6 号，2026-10-11）：Polymarket FOMC 决议档位
-          隐含概率，只读信息渠道；与其余五者互斥，同容器二选一。 */}
-      <button
-        type="button"
-        className={css.button}
-        aria-pressed={predictionOpen}
-        aria-label={t('stage.prediction')}
-        title={t('stage.prediction')}
-        onClick={() => { togglePrediction(!predictionOpen) }}
-      >
-        <IconPrediction size={16} />
-      </button>
       {tasksOpen && (
         <ScheduledTasksPanel
           t={t}
@@ -270,12 +242,6 @@ export function SessionRail({ t, useFolded, useRightbar, startNewSession, toggle
         <MacroPanel
           t={t}
           onClose={() => { setMacroOpen(false) }}
-        />
-      )}
-      {predictionOpen && (
-        <PolymarketPanel
-          t={t}
-          onClose={() => { setPredictionOpen(false) }}
         />
       )}
     </div>

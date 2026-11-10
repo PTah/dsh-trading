@@ -56,6 +56,7 @@ import {
 } from './five-day-series.ts'
 import { fiveDayVolumeTierBarAux } from './volume-tier-bar-aux.ts'
 import { MARKET_TAB_KEY } from './market-vocab.ts'
+import { quoteAboutLine } from './quote-about.ts'
 import { SCOPE_MARKETS, normalizeMarketScope, selectApplicableInstances, supportedIntervals } from './indicator-scope.ts'
 import type { SelectionState } from './store.ts'
 import type { ChartState } from './chart-state.ts'
@@ -1014,15 +1015,21 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
   const isPlaceholderName = !rawName || rawName === symbol || /\(A股\)|\(港股\)/.test(rawName) // i18n-allow: 数据源占位名匹配谓词（"xx (A股)"），非 UI 文案
   const tickerName = (ticker as { name?: string })?.name
   const displayName = (!isPlaceholderName ? rawName : (tickerName || rawName || symbol))
+  const nameIsCode = displayName.trim().toUpperCase() === symbol.trim().toUpperCase()
+  const aboutLine = quoteAboutLine(ticker?.about, t)
 
   return (
     <div className={css.root} data-dshtrading-quote-stage="">
       {/* 顶部报价头与二级 Sub-Tab 导航（图表 | 基本面） */}
       <div className={css.header}>
         <div className={css.ident}>
-          <span className={css.name}>{displayName}</span>
-          <span className={css.code}>{symbol}</span>
-          <span className={css.marketTag}>{t(TAB_KEY[market])}</span>
+          {!nameIsCode && <span className={css.name}>{displayName}</span>}
+          {nameIsCode && aboutLine !== undefined && <span className={css.name}>{aboutLine}</span>}
+          <span className={css.identRow}>
+            <span className={css.code}>{symbol}</span>
+            <span className={css.marketTag}>{t(TAB_KEY[market])}</span>
+          </span>
+          {!nameIsCode && aboutLine !== undefined && <span className={css.about}>{aboutLine}</span>}
         </div>
         <span className={css.price} style={{ color }}>{fmtPrice(stats.price)}</span>
         <span className={css.changes} style={{ color }}>

@@ -449,8 +449,8 @@ export const MARKET_INTERVALS: Record<MarketId, string[]> = {
 
 const SORT_KEY = 'dshtrading.watchlist.sort.v1'
 
-/** 排序三态：默认（存储顺序）/ 涨跌幅降序 / 涨跌幅升序。 */
-export type WatchlistSortMode = 'default' | 'pct-desc' | 'pct-asc'
+/** 排序：存储顺序 / 名称 / 代码 / 类型 / 涨跌幅降序 / 涨跌幅升序。 */
+export type WatchlistSortMode = 'default' | 'name' | 'ticker' | 'type' | 'price-desc' | 'price-asc' | 'yield-desc' | 'yield-asc'
 
 /** 两个区各一份排序（列表区与置顶区独立，2026-11-05 用户裁决）。 */
 export interface WatchlistSortPrefs {
@@ -461,7 +461,7 @@ export interface WatchlistSortPrefs {
 export type WatchlistSortZone = keyof WatchlistSortPrefs
 
 export interface WatchlistSortStoreApi extends WritableObservable<WatchlistSortPrefs> {
-  /** 该区三态循环：default → pct-desc → pct-asc → default；返回切换后的值。 */
+  /** 该区循环：default → name → ticker → type → yield-desc → yield-asc → default。 */
   cycle(zone: WatchlistSortZone): WatchlistSortMode
   /** 直接置位（表头方向指示/测试用）。 */
   setZone(zone: WatchlistSortZone, mode: WatchlistSortMode): void
@@ -469,7 +469,10 @@ export interface WatchlistSortStoreApi extends WritableObservable<WatchlistSortP
 
 /** 坏值一律回落 default：排序偏好不该因为一次坏写把列表永远按涨跌幅钉住。 */
 export function sanitizeSortMode(raw: unknown): WatchlistSortMode {
-  return raw === 'pct-desc' || raw === 'pct-asc' ? raw : 'default'
+  if (raw === 'pct-desc') return 'yield-desc'
+  if (raw === 'pct-asc') return 'yield-asc'
+  if (raw === 'name' || raw === 'ticker' || raw === 'type' || raw === 'price-desc' || raw === 'price-asc' || raw === 'yield-desc' || raw === 'yield-asc') return raw
+  return 'default'
 }
 
 export function createWatchlistSortStore(): WatchlistSortStoreApi {

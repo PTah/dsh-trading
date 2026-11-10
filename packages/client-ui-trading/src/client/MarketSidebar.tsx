@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers, subscribeTradingEvents } from './api.ts'
+import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers, subscribeTradingEvents, type SymbolInfo } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, WatchlistSortMode, WatchlistSortPrefs, WatchlistSortZone, Watchlists } from './store.ts'
@@ -22,11 +22,12 @@ import { publishMarketProviders } from './market-providers.ts'
 import { colorModeStore } from './color-mode.ts'
 import { entryForm, entryMeta, formBadgeKey, resolveAssetClass, type InstrumentMeta } from './instrument-meta.ts'
 import { filterSidebarMarkets, MARKET_TAB_KEY, normalizeSymbolInput, SIDEBAR_MARKETS } from './market-vocab.ts'
+import { groupRuCatalog, RU_LISTING_ORDER } from './ru-catalog.ts'
 import { Sparkline } from './Sparkline.tsx'
 import { IconChevronDown, IconFolder, IconFoldPanel, IconPin, IconSettings, IconUpdate } from './icons.tsx'
 import { GroupMenu, GroupMembershipPopover, type GroupCreateOutcome, type GroupPopoverAnchor } from './WatchlistGroups.tsx'
 import { WatchlistManager } from './WatchlistManager.tsx'
-import type { InstrumentForm } from '@dshtrading/api'
+import type { InstrumentForm, InstrumentListing } from '@dshtrading/api'
 import type { Instrument, MarketId, MarketInfo, ReferenceSeries, Ticker } from './types.ts'
 import { usePoll } from './usePoll.ts'
 import { isResidentPollMarket } from './quote-budget.ts'
@@ -63,6 +64,7 @@ export interface MarketSidebarInjected {
   setPinned(key: string, pinned: boolean): Promise<boolean>
   /** 该区三态排序循环（rows = 列表区，pinned = 置顶区），返回切换后的模式。 */
   cycleSort(zone: WatchlistSortZone): WatchlistSortMode
+  setSort?(zone: WatchlistSortZone, mode: WatchlistSortMode): void
 }
 
 export type MarketSidebarProps =
@@ -107,13 +109,39 @@ export function displayTickerEqual(prev: Ticker | undefined, next: Ticker): bool
     && prev.price === next.price
     && prev.prevClose === next.prevClose
     && prev.changePercent === next.changePercent
+    && prev.name === next.name
+    && prev.about?.listing === next.about?.listing
+    && prev.about?.sector === next.about?.sector
+    && prev.about?.maturity === next.about?.maturity
+    && prev.about?.couponsPerYear === next.about?.couponsPerYear
 }
 
 /** 三态排序的提示/读屏文案键（表头排序按钮的 aria-label 与 title 同源）。 */
+const CATALOG_LABEL: Record<InstrumentListing, MarketLocaleKey> = {
+  share: 'sidebar.catalog.share',
+  fund: 'sidebar.catalog.fund',
+  bond: 'sidebar.catalog.bond',
+}
+
 const SORT_LABEL_KEY: Record<WatchlistSortMode, MarketLocaleKey> = {
   default: 'sort.default',
-  'pct-desc': 'sort.pctDesc',
-  'pct-asc': 'sort.pctAsc',
+  name: 'sort.name',
+  ticker: 'sort.ticker',
+  type: 'sort.type',
+  'yield-desc': 'sort.yieldDesc',
+  'yield-asc': 'sort.yieldAsc',
+  'price-desc': 'sort.priceDesc',
+  'price-asc': 'sort.priceAsc',
+}
+
+const SORT_OPTIONS: readonly WatchlistSortMode[] = [
+  'default', 'name', 'ticker', 'type', 'price-desc', 'price-asc', 'yield-desc', 'yield-asc',
+]
+
+const LISTING_LABEL: Record<InstrumentListing, MarketLocaleKey> = {
+  share: 'listing.share',
+  fund: 'listing.fund',
+  bond: 'listing.bond',
 }
 
 /**
@@ -136,7 +164,7 @@ interface RowGroupMenu {
 
 export function MarketSidebar({
   t, useSelection, useWatchlists, useGroups, useSortPrefs, addInstrument, removeInstrument, selectInstrument, onFold, openSettings,
-  createGroup, renameGroup, deleteGroup, assignGroupMember, setActiveGroup, cycleSort, setPinned, updateAvailable, onOpenUpdater,
+  createGroup, renameGroup, deleteGroup, assignGroupMember, setActiveGroup, setSort, setPinned, updateAvailable, onOpenUpdater,
 }: MarketSidebarProps) {
   const selection = useSelection(value => value.instrument)
   const watchlists = useWatchlists(value => value)
@@ -152,6 +180,9 @@ export function MarketSidebar({
   /** 形态过滤（2026-10-08 加密永续 P5）：仅 crypto 目标市场生效，缺省「全部」= 不过滤。 */
   const [formFilter, setFormFilter] = useState<'all' | InstrumentForm>('all')
   const [catalogVersion, setCatalogVersion] = useState(0)
+  /** 俄罗斯页签的完整名册（股票 / 基金 / 债券）。null = 还没拉过。 */
+  const [ruCatalog, setRuCatalog] = useState<SymbolInfo[] | null>(null)
+  const [ruCatalogError, setRuCatalogError] = useState(false)
   const [groupMenuOpen, setGroupMenuOpen] = useState(false)
   const [managerOpen, setManagerOpen] = useState(false)
   const [rowGroupMenu, setRowGroupMenu] = useState<RowGroupMenu | null>(null)
@@ -195,11 +226,18 @@ export function MarketSidebar({
     for (const m of targetMarkets) {
       fetchSymbols(m)
         .then((symbols) => {
-          if (cancelled || symbols.length === 0) return
+          if (cancelled) return
+          if (m === 'ru') {
+            setRuCatalog(symbols)
+            setRuCatalogError(false)
+          }
+          if (symbols.length === 0) return
           setDynamicCatalog(m, symbols)
           setCatalogVersion((v) => v + 1)
         })
-        .catch(() => { /* 桥不可用/无全集静默回退纯静态 */ })
+        .catch(() => {
+          if (!cancelled && m === 'ru') setRuCatalogError(true)
+        })
     }
     return () => { cancelled = true }
   }, [tab])
@@ -213,13 +251,52 @@ export function MarketSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markets, watchlists])
 
+  const browsingRu = tab === 'ru' && activeGroupId === null
+  const ruSections = useMemo(() => {
+    if (!browsingRu) return null
+    return groupRuCatalog(ruCatalog ?? [], draft)
+  }, [browsingRu, ruCatalog, draft])
+  const [catalogOpen, setCatalogOpen] = useState<Record<InstrumentListing, boolean>>({
+    share: false,
+    fund: false,
+    bond: false,
+  })
+  useEffect(() => {
+    if (draft.trim() === '' || ruSections === null) return
+    setCatalogOpen({
+      share: ruSections.share.length > 0,
+      fund: ruSections.fund.length > 0,
+      bond: ruSections.bond.length > 0,
+    })
+  }, [draft, ruSections])
+  const listingBySymbol = useMemo(() => {
+    const map = new Map<string, InstrumentListing>()
+    for (const entry of ruCatalog ?? []) {
+      if (entry.listing === 'share' || entry.listing === 'fund' || entry.listing === 'bond') {
+        map.set(entry.symbol.toUpperCase(), entry.listing)
+      }
+    }
+    return map
+  }, [ruCatalog])
+
   const rows = useMemo(() => {
     // 分组视图：跨市场按归属过滤（issue #82）。
     if (activeGroupId !== null) return allRows.filter(row => row.groups?.includes(activeGroupId))
+    // 俄罗斯页签是名册，不是自选。行情轮询仍只打自选（见 quoteRows）。
+    if (tab === 'ru') {
+      if (ruSections === null) return []
+      return RU_LISTING_ORDER.flatMap(listing => ruSections[listing].map(entry => ({
+        market: 'ru' as const,
+        symbol: entry.symbol,
+        ...(entry.name !== undefined ? { name: entry.name } : {}),
+        ...(entry.form !== undefined ? { form: entry.form } : {}),
+        ...(entry.assetClass !== undefined ? { assetClass: entry.assetClass } : {}),
+      })))
+    }
     if (tab === 'watch') return allRows
     return rowsFor(watchlists, tab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows, tab, activeGroupId, watchlists])
+  }, [allRows, tab, activeGroupId, watchlists, ruSections])
 
   // 置顶分区 + 列表区（2026-11-05）：分区、两区各自的排序、未知涨跌幅排末尾全部由
   // watchlist-order.ts 判定，本组件只消费结果——市场页签与分组视图共用同一条路径。
@@ -229,9 +306,12 @@ export function MarketSidebar({
       pinned: groupState.pinned,
       sort: sortPrefs,
       pctOf: row => pctOfRow(row, prices, series),
+      priceOf: row => prices[rowKey(row.market, row.symbol)]?.price,
       keyOf: row => rowKey(row.market, row.symbol),
+      nameOf: row => row.name?.trim() || row.symbol,
+      listingOf: row => listingBySymbol.get(row.symbol.toUpperCase()) ?? 'other',
     }),
-    [rows, groupState.pinned, sortPrefs, prices, series],
+    [rows, groupState.pinned, sortPrefs, prices, series, listingBySymbol],
   )
 
   // 有界化：prices/series 只保有「当前自选全集」的键，移出自选的标的即时回收。
@@ -274,12 +354,15 @@ export function MarketSidebar({
     return counts
   }, [allRows])
 
-  const rowsKey = rows.map(row => rowKey(row.market, row.symbol)).join('|')
+  // 名册可能有几百行。轮询只覆盖自选，避免为每只债券打行情和 K 线。
+  const favoriteKeys = useMemo(() => new Set(allRows.map(row => rowKey(row.market, row.symbol))), [allRows])
+  const quoteRows = browsingRu ? allRows : rows
+  const rowsKey = quoteRows.map(row => rowKey(row.market, row.symbol)).join('|')
 
   // 轮询预算（见 quote-budget.ts）：无常驻预算的市场（global/金十）只在 rowsKey
   // 变化时按需取一次，常驻轮询只覆盖允许常驻的市场——`*OnDemandKeyRef` 记住本
   // 轮 rowsKey 是否已按需取过，避免每拍都重拉。
-  const residentRows = useMemo(() => rows.filter(row => isResidentPollMarket(row.market)), [rows])
+  const residentRows = useMemo(() => quoteRows.filter(row => isResidentPollMarket(row.market)), [quoteRows])
   const seriesOnDemandKeyRef = useRef('')
   const pricesOnDemandKeyRef = useRef('')
 
@@ -291,10 +374,12 @@ export function MarketSidebar({
   // 联想候选：自选页签跨市场全局搜索（候选自带市场）；市场页签只搜本市场字典（显式注入当前市场）。
   // 形态过滤按 crypto 生效（2026-10-08 P5）：catalog 的 searchSymbols/searchAllMarkets 同参。
   const suggestions = useMemo(
-    () => (tab === 'watch'
-      ? searchAllMarkets(draft, 8, activeForm)
-      : searchSymbols(tab, draft, 8, activeForm).map(entry => ({ ...entry, market: tab }))),
-    [tab, draft, catalogVersion, activeForm],
+    () => (browsingRu || draft.trim() === ''
+      ? []
+      : tab === 'watch'
+        ? searchAllMarkets(draft, 8, activeForm)
+        : searchSymbols(tab, draft, 8, activeForm).map(entry => ({ ...entry, market: tab }))),
+    [tab, draft, catalogVersion, activeForm, browsingRu],
   )
 
   // 真实在线联想：当用户输入关键词时，防抖向上游真实检索标的
@@ -336,7 +421,7 @@ export function MarketSidebar({
   usePoll(async () => {
     const onDemand = seriesOnDemandKeyRef.current !== rowsKey
     seriesOnDemandKeyRef.current = rowsKey
-    const targets = onDemand ? rows : residentRows
+    const targets = onDemand ? quoteRows : residentRows
     if (targets.length === 0) return
     const now = Date.now()
     await Promise.all(targets.map(async (row) => {
@@ -410,7 +495,7 @@ export function MarketSidebar({
   usePoll(async () => {
     const onDemand = pricesOnDemandKeyRef.current !== rowsKey
     pricesOnDemandKeyRef.current = rowsKey
-    const targets = onDemand ? rows : residentRows
+    const targets = onDemand ? quoteRows : residentRows
     if (targets.length === 0) return
     const byMarket = new Map<MarketId, string[]>()
     const rowByKey = new Map<string, Instrument>()
@@ -500,20 +585,22 @@ export function MarketSidebar({
     return result.reason === 'duplicate' ? 'duplicate' : 'failed'
   }
 
-  /** 表头三态排序开关（列表区与置顶区同款，仅 data-sort-zone 与该区当前模式不同）。 */
-  const renderSortButton = (zone: WatchlistSortZone, mode: WatchlistSortMode) => (
-    <button
-      type="button"
-      className={css.sortBtn}
-      data-sort-zone={zone}
-      data-sort-mode={mode}
-      aria-label={t(SORT_LABEL_KEY[mode])}
-      title={t(SORT_LABEL_KEY[mode])}
-      onClick={() => { cycleSort(zone) }}
-    >
-      <span className={css.sortBtnLabel}>{t('header.priceChange')}</span>
-      {mode !== 'default' && <IconChevronDown size={10} />}
-    </button>
+  const renderSortSelect = (zone: WatchlistSortZone, mode: WatchlistSortMode) => (
+    <label className={css.sortLine}>
+      <span className={css.sortLabel}>{t('sort.label')}</span>
+      <select
+        className={css.sortSelect}
+        data-sort-zone={zone}
+        data-sort-mode={mode}
+        aria-label={t('sort.label')}
+        value={mode}
+        onChange={(event) => { setSort?.(zone, event.target.value as WatchlistSortMode) }}
+      >
+        {SORT_OPTIONS.map((option) => (
+          <option key={option} value={option}>{t(SORT_LABEL_KEY[option])}</option>
+        ))}
+      </select>
+    </label>
   )
 
   /** 一行自选（置顶区与列表区同款渲染；置顶行多一个 data-pinned 标记）。 */
@@ -533,6 +620,7 @@ export function MarketSidebar({
     const rowGroupAnchor = rowGroupOpen ? rowGroupMenu.anchor : null
     // 形态徽标（2026-10-08 P5）：现货不挂徽标（默认形态），永续按资产类别细分。
     const formBadge = formBadgeKey(row, resolveAssetClass(row.market, row))
+    const listing = browsingRu ? undefined : listingBySymbol.get(row.symbol.toUpperCase())
     return (
       <button
         key={key}
@@ -542,6 +630,8 @@ export function MarketSidebar({
         aria-selected={selected}
         className={css.row}
         data-row-key={key}
+        data-catalog={browsingRu ? 'true' : undefined}
+        data-listing={listing}
         data-pinned={isPinned ? 'true' : undefined}
         data-selected={selected ? 'true' : undefined}
         title={t('row.select')}
@@ -558,18 +648,25 @@ export function MarketSidebar({
           </span>
           <span className={css.codeRow}>
             <span className={css.code}>{row.symbol}</span>
+            {listing !== undefined && (
+              <span className={css.listingTag} data-listing={listing}>{t(LISTING_LABEL[listing])}</span>
+            )}
             {formBadge !== null && <span className={css.formBadge}>{t(formBadge)}</span>}
             {(tab === 'watch' || activeGroupId !== null) && <span className={css.marketTag}>{t(MARKET_TAB_KEY[row.market])}</span>}
           </span>
         </span>
-        <span className={css.spark}>
-          <Sparkline values={ref?.closes ?? EMPTY_CLOSES} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
-        </span>
-        <span className={css.quote}>
-          <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>
-          <span className={css.pct} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPercent(pct)}</span>
-        </span>
-        <span
+        {!browsingRu && (
+          <span className={css.spark}>
+            <Sparkline values={ref?.closes ?? EMPTY_CLOSES} {...(ref?.xFractions !== undefined ? { xFractions: ref.xFractions } : {})} width={56} height={22} up={up} colorMode={colorMode} />
+          </span>
+        )}
+        {!browsingRu && (
+          <span className={css.quote}>
+            <span className={css.price} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPrice(price)}</span>
+            <span className={css.pct} style={{ color: directionColor(pct ?? 0, colorMode) }}>{fmtPercent(pct)}</span>
+          </span>
+        )}
+        {!browsingRu && <span
           role="button"
           tabIndex={0}
           data-pin-toggle="true"
@@ -591,8 +688,8 @@ export function MarketSidebar({
           }}
         >
           <IconPin size={13} pressed={isPinned} />
-        </span>
-        <span
+        </span>}
+        {!browsingRu && <span
           role="button"
           aria-haspopup="menu"
           aria-expanded={rowGroupOpen}
@@ -611,7 +708,7 @@ export function MarketSidebar({
           }}
         >
           <IconFolder size={13} />
-        </span>
+        </span>}
         {rowGroupAnchor !== null && (
           <GroupMembershipPopover
             t={t}
@@ -622,23 +719,37 @@ export function MarketSidebar({
             onClose={() => setRowGroupMenu(null)}
           />
         )}
-        <span
-          role="button"
-          aria-label={activeGroupId !== null ? t('group.remove') : t('row.remove')}
-          title={activeGroupId !== null ? t('group.remove') : t('row.remove')}
-          className={css.remove}
-          onClick={(event) => {
-            event.stopPropagation()
-            if (activeGroupId !== null) {
-              // 分组视图：✕ 仅移出分组（标的保留在自选）。
-              void assignGroupMember(activeGroupId, row.market, row.symbol, false, row.name)
-            } else {
-              removeInstrument(row.market, row.symbol)
-            }
-          }}
-        >
-          ✕
-        </span>
+        {browsingRu && !favoriteKeys.has(key) ? (
+          <span
+            role="button"
+            className={css.catalogAdd}
+            aria-label={t('sidebar.catalog.add')}
+            title={t('sidebar.catalog.add')}
+            onClick={(event) => {
+              event.stopPropagation()
+              addInstrument(row.market, row)
+            }}
+          >
+            {t('sidebar.catalog.add')}
+          </span>
+        ) : (
+          <span
+            role="button"
+            aria-label={browsingRu ? t('sidebar.catalog.inList') : (activeGroupId !== null ? t('group.remove') : t('row.remove'))}
+            title={browsingRu ? t('sidebar.catalog.inList') : (activeGroupId !== null ? t('group.remove') : t('row.remove'))}
+            className={css.remove}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (activeGroupId !== null) {
+                void assignGroupMember(activeGroupId, row.market, row.symbol, false, row.name)
+              } else {
+                removeInstrument(row.market, row.symbol)
+              }
+            }}
+          >
+            {browsingRu ? '✓' : '✕'}
+          </span>
+        )}
       </button>
     )
   }
@@ -795,7 +906,7 @@ export function MarketSidebar({
               <input
                 className={css.addInput}
                 value={draft}
-                placeholder={t('sidebar.addPlaceholder')}
+                placeholder={browsingRu ? t('sidebar.catalog.search') : t('sidebar.addPlaceholder')}
                 onChange={event => { setDraft(event.target.value) }}
               />
               <button className={css.addButton} type="submit" disabled={draft.trim() === ''}>{t('sidebar.add')}</button>
@@ -826,15 +937,62 @@ export function MarketSidebar({
           )
         })()}
 
-      {/* 列表表头（第三列是排序开关：默认顺序 → 涨幅从高到低 → 涨幅从低到高） */}
-      <div className={css.listHeader}>
-        <span>{t('header.symbol')}</span>
-        <span className={css.listHeaderColCenter}>{t('header.trend')}</span>
-        {renderSortButton('rows', sortPrefs.rows)}
-      </div>
+      {browsingRu && <div className={css.catalogHint}>{t('sidebar.catalog.hint')}</div>}
 
-      {/* 三段式标的列表：置顶分区（自带排序开关）+ 分隔线 + 列表区 */}
-      {rows.length === 0 && !loadError
+      {/* 列表表头（第三列是排序开关：默认顺序 → 涨幅从高到低 → 涨幅从低到高） */}
+      {!browsingRu && (
+        <>
+          {renderSortSelect('rows', sortPrefs.rows)}
+          <div className={css.listHeader}>
+            <span>{t('header.symbol')}</span>
+            <span className={css.listHeaderColCenter}>{t('header.trend')}</span>
+            <span className={css.listHeaderColEnd}>{t('header.priceChange')}</span>
+          </div>
+        </>
+      )}
+
+      {/* 俄罗斯页签：全市场名册，按股票 / 基金 / 债券分组。点行看行情，按钮才进自选。 */}
+      {browsingRu ? (
+        ruCatalog === null && !ruCatalogError ? (
+          <div className={css.empty}>{t('sidebar.catalog.loading')}</div>
+        ) : rows.length === 0 ? (
+          <div className={css.empty}>
+            {ruCatalogError || (ruCatalog !== null && ruCatalog.length === 0 && draft.trim() === '')
+              ? t('sidebar.catalog.failed')
+              : t('sidebar.catalog.empty')}
+          </div>
+        ) : (
+          <div className={css.list} role="listbox" aria-label={t('tab.ru')}>
+            {RU_LISTING_ORDER.map((listing) => {
+              const section = ruSections?.[listing] ?? []
+              if (section.length === 0) return null
+              const open = catalogOpen[listing]
+              return (
+                <div key={listing} role="group" aria-label={t(CATALOG_LABEL[listing])}>
+                  <button
+                    type="button"
+                    className={css.catalogSection}
+                    aria-label={t(CATALOG_LABEL[listing])}
+                    aria-expanded={open}
+                    onClick={() => { setCatalogOpen((prev) => ({ ...prev, [listing]: !prev[listing] })) }}
+                  >
+                    <span className={css.catalogCaret} data-open={open ? 'true' : undefined} aria-hidden="true" />
+                    <span>{t(CATALOG_LABEL[listing])}</span>
+                    <span className={css.catalogCount}>{section.length}</span>
+                  </button>
+                  {open && section.map(entry => renderRow({
+                    market: 'ru',
+                    symbol: entry.symbol,
+                    ...(entry.name !== undefined ? { name: entry.name } : {}),
+                    ...(entry.form !== undefined ? { form: entry.form } : {}),
+                    ...(entry.assetClass !== undefined ? { assetClass: entry.assetClass } : {}),
+                  }, false))}
+                </div>
+              )
+            })}
+          </div>
+        )
+      ) : rows.length === 0 && !loadError
         ? (
             <div className={css.empty}>
               {activeGroupId !== null ? t('group.emptyHint') : (tab === 'watch' ? t('sidebar.emptyHint') : t('sidebar.empty'))}
@@ -844,9 +1002,9 @@ export function MarketSidebar({
             <div className={css.list} role="listbox" aria-label={t('sidebar.markets')}>
               {pinnedRows.length > 0 && (
                 <div role="group" aria-label={t('pinned.title')}>
-                  <div className={css.listHeader + ' ' + css.pinnedHeader} data-pinned-header="true">
+                  <div className={css.pinnedHeader} data-pinned-header="true">
                     <span className={css.pinnedTitle}>{t('pinned.title')}</span>
-                    {renderSortButton('pinned', sortPrefs.pinned)}
+                    {renderSortSelect('pinned', sortPrefs.pinned)}
                   </div>
                   {pinnedRows.map(row => renderRow(row, true))}
                 </div>

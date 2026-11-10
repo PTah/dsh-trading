@@ -69,6 +69,29 @@ export interface Ticker {
   readonly prevClose?: number
   /** 相对昨收的涨跌幅（百分比，如 -0.89 表示 -0.89%；部分数据源可缺省）。 */
   readonly changePercent?: number
+  /**
+   * 债券报价（仅债券）。pricePercent 是 чистая цена в % номинала，
+   * clean/dirty — рубли за одну бумагу，aci — НКД в валюте номинала。
+   */
+  readonly bond?: {
+    readonly nominal: number
+    readonly aci: number
+    readonly pricePercent: number
+    readonly clean: number
+    readonly dirty: number
+  }
+  /**
+   * 这只证券是什么（俄股名册）：板块、行业枚举、债券到期日与年付息次数。
+   * 文案由界面格式化，连接器只交原始字段。
+   */
+  readonly about?: {
+    readonly listing: 'share' | 'fund' | 'bond' | 'other'
+    readonly sector?: string
+    readonly focus?: string
+    readonly maturity?: string
+    readonly couponsPerYear?: number
+    readonly ofz?: boolean
+  }
 }
 
 /** 单根 K 线。 */
@@ -623,6 +646,12 @@ export type InstrumentForm = 'spot' | 'perp'
  */
 export type InstrumentAssetClass = 'crypto' | 'equity' | 'commodity' | 'index'
 
+/**
+ * 名册分组（展示用，不承载交易语义）。俄罗斯市场侧栏用它把 TQBR / ETF / 债券分开。
+ * 其它市场不填。
+ */
+export type InstrumentListing = 'share' | 'fund' | 'bond'
+
 /** 合约专有元数据（仅 `form=perp` 有值）：交易所元数据原样透传，不本地推断。 */
 export interface InstrumentContract {
   /** 合约乘数（OKX ctVal / Binance contractSize）。 */
@@ -648,6 +677,8 @@ export interface InstrumentRef {
   /** 缺省 = spot（老数据零迁移）。 */
   readonly form?: InstrumentForm
   readonly assetClass?: InstrumentAssetClass
+  /** 名册分组。缺省 = 不分组。 */
+  readonly listing?: InstrumentListing
   readonly contract?: InstrumentContract
 }
 

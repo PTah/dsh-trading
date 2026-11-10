@@ -279,6 +279,9 @@ importers:
       '@dshtrading/kit-hk':
         specifier: workspace:^
         version: link:../kit-hk
+      '@dshtrading/kit-ru':
+        specifier: workspace:^
+        version: link:../kit-ru
       '@dshtrading/kit-us':
         specifier: workspace:^
         version: link:../kit-us

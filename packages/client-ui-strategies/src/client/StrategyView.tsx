@@ -35,6 +35,7 @@ import {
 } from './strategy-locale.ts'
 import { stanceOf } from './signal-brief.ts'
 import { advise, type InvestorAction } from './investor-advice.ts'
+import { adjustBondAdvice, bondAciIsMaterial, type BondQuote } from './bond-advice.ts'
 export { strategyName, strategySummary, paramLabel, exitReasonText } from './strategy-locale.ts'
 import css from './StrategyView.module.css'
 
@@ -100,6 +101,7 @@ export interface StrategyViewProps {
     fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<Kline[]>
     fetchCustomStrategies: () => Promise<Array<{ id: string; title: string; horizon: string; summary: string; paramsJson: string; computeSource: string }>>
     fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string }>>
+    fetchTickers?: (market: string, symbols: string[]) => Promise<Record<string, { ok?: boolean; ticker?: { bond?: BondQuote } }>>
     subscribeTradingEvents: (handlers: { strategies?: () => void }) => () => void
     saveCustomStrategy?: ((input: StrategyEditorSaveInput) => Promise<{ ok: true } | { ok: false; reason: string } | null>) | undefined
     deleteCustomStrategy?: ((id: string) => Promise<boolean>) | undefined
@@ -212,6 +214,8 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
 
   const [insightRows, setInsightRows] = useState<Array<{ id: string; horizon: StrategyHorizon; stance: 'long' | 'flat'; name: string; howto: string }>>([])
   const [advice, setAdvice] = useState<InvestorAction | null>(null)
+  const [bondQuote, setBondQuote] = useState<BondQuote | null>(null)
+  const shownAdvice = advice === null || bondQuote === null ? advice : adjustBondAdvice(advice, bondQuote).action
 
   // 3. 回测运行状态
   const [loading, setLoading] = useState(false)
@@ -228,8 +232,23 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     setResult(null)
     setInsightRows([])
     setAdvice(null)
+    setBondQuote(null)
     setErrorMsg(null)
   }, [market, symbol])
+
+  // Облигация: номинал и НКД приходят котировкой, не из свечей.
+  useEffect(() => {
+    if (symbol === '' || stableBridge.fetchTickers === undefined) return
+    let cancelled = false
+    void stableBridge.fetchTickers(market, [symbol]).then((rows) => {
+      if (cancelled) return
+      const row = rows[symbol]
+      setBondQuote(row?.ok === true && row.ticker?.bond !== undefined ? row.ticker.bond : null)
+    }).catch(() => {
+      if (!cancelled) setBondQuote(null)
+    })
+    return () => { cancelled = true }
+  }, [market, symbol, stableBridge])
 
   // 同步持久化
   useEffect(() => {
@@ -470,6 +489,34 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     return strategyParadigms.filter((d) => tombstones.includes(d.id))
   }, [tombstones, mgmtAvailable])
 
+  const bondNote = bondQuote === null ? null : (
+    <div className={css.strategyCard}>
+      <div className={css.cardTitle}>{t('sv.bond.title')}</div>
+      <div className={css.cardSummary}>{t(
+        bondQuote.pricePercent < 98 ? 'sv.bond.discount' : bondQuote.pricePercent > 102 ? 'sv.bond.premium' : 'sv.bond.near',
+        {
+          pct: bondQuote.pricePercent.toFixed(1),
+          clean: bondQuote.clean.toFixed(2),
+          nominal: String(Math.round(bondQuote.nominal)),
+          aci: bondQuote.aci.toFixed(2),
+          dirty: bondQuote.dirty.toFixed(2),
+          share: (bondQuote.aci / bondQuote.nominal * 100).toFixed(1),
+        },
+      )}</div>
+      <div className={css.cardSummary}>{t(bondAciIsMaterial(bondQuote) ? 'sv.bond.aciHigh' : 'sv.bond.aci', {
+        pct: bondQuote.pricePercent.toFixed(1),
+        clean: bondQuote.clean.toFixed(2),
+        nominal: String(Math.round(bondQuote.nominal)),
+        aci: bondQuote.aci.toFixed(2),
+        dirty: bondQuote.dirty.toFixed(2),
+        share: (bondQuote.aci / bondQuote.nominal * 100).toFixed(1),
+      })}</div>
+      {advice !== null && shownAdvice !== null && shownAdvice !== advice && (
+        <div className={css.cardSummary}>{t(shownAdvice === 'buy' ? 'sv.bond.firmer' : 'sv.bond.softer')}</div>
+      )}
+    </div>
+  )
+
   return (
     <div className={css.root} data-dshtrading-strategy-view="">
       {/* 1. 分区分段控件（选股策略 | 量化策略） */}
@@ -504,6 +551,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
         {section === 'quant' && (
           <>
             <div className={css.cardSummary}>{symbol === '' ? t('sv.noInstrument') : t('sv.quant.hint', { symbol })}</div>
+            {bondNote}
             {/* 2b-1. 周期分段 + 新建策略 */}
             <div className={css.mgmtRow}>
               <div className={css.horizonSelector} role="tablist">
@@ -610,16 +658,17 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       ) : section === 'insight' ? (
         <div className={css.tableSection}>
           <div className={css.cardSummary}>{symbol === '' ? t('sv.noInstrument') : t('sv.insight.lead', { symbol })}</div>
+          {bondNote}
           <div className={css.configBar}>
             <button type="button" className={css.runBtn} disabled={loading || symbol === ''} onClick={() => { void handleInsight() }}>
               {loading ? t('sv.insight.running') : t('sv.insight.run')}
             </button>
           </div>
           {errorMsg !== null && <div className={css.errorMessage}>{errorMsg}</div>}
-          {advice !== null && (
+          {shownAdvice !== null && (
             <div className={css.strategyCard} data-active="true">
-              <div className={css.cardTitle}>{t(INSIGHT_ACTION[advice])}</div>
-              <div className={css.cardSummary}>{t(INSIGHT_ACTION_HINT[advice])}</div>
+              <div className={css.cardTitle}>{t(INSIGHT_ACTION[shownAdvice])}</div>
+              <div className={css.cardSummary}>{t(INSIGHT_ACTION_HINT[shownAdvice])}</div>
             </div>
           )}
           {insightRows.length > 0 && (
