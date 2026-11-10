@@ -31,6 +31,13 @@ export function strategySummary(def: { id: string; summary: string }, t: (key: S
   return translateOr(`strat.${def.id}.summary` as StrategyLocaleKey, def.summary, t)
 }
 
+/** Пояснение простым языком. Нет ключа — пустая строка, чтобы не показывать сырой id. */
+export function strategyHowto(def: { id: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
+  const key = `strat.${def.id}.howto` as StrategyLocaleKey
+  const translated = t(key)
+  return translated !== key ? translated : ''
+}
+
 export function paramLabel(def: { id: string }, param: { key: string; label: string }, t: (key: StrategyLocaleKey, params?: Record<string, unknown>) => string): string {
   return translateOr(`strat.${def.id}.param.${param.key}` as StrategyLocaleKey, param.label, t)
 }

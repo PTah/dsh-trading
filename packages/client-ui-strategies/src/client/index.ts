@@ -32,7 +32,11 @@ interface StageViewsService {
     id: string
     titleKey: string
     order?: number
-    render: ComponentType<{ t: (key: string) => string; view: string }>
+    render: ComponentType<{
+      t: (key: string) => string
+      view: string
+      useSelection?: <T>(selector: (state: { instrument: { market: string; symbol: string; name?: string } | null }) => T) => T
+    }>
   }): void
 }
 interface BridgeService {
@@ -91,6 +95,7 @@ export function apply(ctx: ClientContext): void {
         t: t as unknown as (key: string) => string,
         view: props.view,
         bridge,
+        useSelection: props.useSelection,
       }),
     })
   })

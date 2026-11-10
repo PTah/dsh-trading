@@ -1,0 +1,42 @@
+{
+  "instruments": [
+    {
+      "isin": "RU0009029540",
+      "figi": "BBG004730N88",
+      "ticker": "SBER",
+      "classCode": "TQBR",
+      "instrumentType": "share",
+      "name": "Сбербанк",
+      "uid": "e6123145-9665-43e0-8413-cd61b8aa9b13",
+      "positionUid": "41eb2102-5333-4713-bf15-72b204c4bf7b",
+      "instrumentKind": "INSTRUMENT_TYPE_SHARE",
+      "apiTradeAvailableFlag": true,
+      "forIisFlag": true,
+      "first1minCandleDate": "2018-03-07T18:33:00Z",
+      "first1dayCandleDate": "2000-01-04T07:00:00Z",
+      "forQualInvestorFlag": false,
+      "weekendFlag": true,
+      "blockedTcaFlag": false,
+      "lot": 1
+    },
+    {
+      "isin": "RU0009029557",
+      "figi": "BBG0047315Y7",
+      "ticker": "SBERP",
+      "classCode": "TQBR",
+      "instrumentType": "share",
+      "name": "Сбербанк - привилегированные акции",
+      "uid": "c190ff1f-1447-4227-b543-316332699ca5",
+      "positionUid": "9cf9718d-50df-4326-a205-cf306933607e",
+      "instrumentKind": "INSTRUMENT_TYPE_SHARE",
+      "apiTradeAvailableFlag": true,
+      "forIisFlag": true,
+      "first1minCandleDate": "2018-03-07T18:33:00Z",
+      "first1dayCandleDate": "2000-01-04T07:00:00Z",
+      "forQualInvestorFlag": false,
+      "weekendFlag": true,
+      "blockedTcaFlag": false,
+      "lot": 1
+    }
+  ]
+}

@@ -6,6 +6,9 @@ import {
   bollingerReversionStrategy,
   smaBaselineStrategy,
   momentum12mStrategy,
+  trendSmaStrategy,
+  rsi14BandStrategy,
+  peakDrawdownStrategy,
 } from '../src/paradigms/index.ts'
 import { run } from '../src/engine.ts'
 import type { Kline } from '../src/types.ts'
@@ -213,7 +216,42 @@ describe('Strategy Paradigms', () => {
     })
   })
 
-  describe('all 6 paradigms execution with 300 bars & default params', () => {
+  describe('trend-sma', () => {
+    it('enters when the short average crosses above the long average', () => {
+      const bars = makeTrendBars(80, 0, 100).map((bar, index) => {
+        const close = index < 30 ? 100 - index * 0.4 : 88 + (index - 30) * 2
+        return { ...bar, open: close, high: close + 1, low: close - 1, close }
+      })
+      const signals = trendSmaStrategy.compute(bars, { fast: 5, slow: 15 })
+      expect(signals[0]?.action).toBe('entry')
+    })
+  })
+
+  describe('rsi-14-band', () => {
+    it('enters after a drop and exits after a rebound', () => {
+      const bars = makeTrendBars(40, 0, 100).map((bar, index) => {
+        const close = index < 20 ? 100 - index * 3 : 40 + (index - 20) * 6
+        return { ...bar, open: close, high: close + 1, low: close - 1, close }
+      })
+      const signals = rsi14BandStrategy.compute(bars, { period: 14, oversold: 32, overbought: 72 })
+      expect(signals.some((signal) => signal.action === 'entry')).toBe(true)
+      expect(signals.some((signal) => signal.action === 'exit')).toBe(true)
+    })
+  })
+
+  describe('peak-drawdown', () => {
+    it('enters near the high and exits after a deep drop', () => {
+      const bars = makeTrendBars(40, 0, 100).map((bar, index) => {
+        const close = index < 25 ? 100 : 100 - (index - 24) * 4
+        return { ...bar, open: close, high: close + 1, low: close - 1, close }
+      })
+      const signals = peakDrawdownStrategy.compute(bars, { lookback: 10, nearHighPct: 5, exitDrawdownPct: 15 })
+      expect(signals[0]?.action).toBe('entry')
+      expect(signals.some((signal) => signal.action === 'exit')).toBe(true)
+    })
+  })
+
+  describe('all paradigms execution with 300 bars & default params', () => {
     const allStrategies = [
       donchianBreakoutStrategy,
       rsiReversionStrategy,
@@ -221,6 +259,9 @@ describe('Strategy Paradigms', () => {
       bollingerReversionStrategy,
       smaBaselineStrategy,
       momentum12mStrategy,
+      trendSmaStrategy,
+      rsi14BandStrategy,
+      peakDrawdownStrategy,
     ]
 
     // 构造 300 根包含牛市、震荡、熊市的模拟日 K

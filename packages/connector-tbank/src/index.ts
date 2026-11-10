@@ -23,6 +23,7 @@ import Schema from '@deepseek-ai/schemastery'
 import type {
   AccountBalance,
   Disposable,
+  InstrumentRef,
   Interval,
   Kline,
   MarketDataService,
@@ -46,6 +47,50 @@ import {
 export * from './rest.js'
 
 export const name = 'dsh-trading-ru-connector-tbank'
+
+/**
+ * 流动性足够、脚本可扫的 MOEX 股票（TQBR）。T-Bank Shares 全量名册太大且要分页，
+ * 选股器只需要这份稳定子集；符号仍走 FindInstrument。
+ */
+export const RU_LIQUID_SHARES: readonly { symbol: string; name: string }[] = [
+  { symbol: 'SBER', name: 'Сбербанк' },
+  { symbol: 'SBERP', name: 'Сбербанк-п' },
+  { symbol: 'GAZP', name: 'Газпром' },
+  { symbol: 'LKOH', name: 'Лукойл' },
+  { symbol: 'GMKN', name: 'Норникель' },
+  { symbol: 'NVTK', name: 'Новатэк' },
+  { symbol: 'ROSN', name: 'Роснефть' },
+  { symbol: 'TATN', name: 'Татнефть' },
+  { symbol: 'TATNP', name: 'Татнефть-п' },
+  { symbol: 'SNGS', name: 'Сургутнефтегаз' },
+  { symbol: 'SNGSP', name: 'Сургутнефтегаз-п' },
+  { symbol: 'CHMF', name: 'Северсталь' },
+  { symbol: 'NLMK', name: 'НЛМК' },
+  { symbol: 'MAGN', name: 'ММК' },
+  { symbol: 'ALRS', name: 'АЛРОСА' },
+  { symbol: 'PLZL', name: 'Полюс' },
+  { symbol: 'MTSS', name: 'МТС' },
+  { symbol: 'MGNT', name: 'Магнит' },
+  { symbol: 'PHOR', name: 'ФосАгро' },
+  { symbol: 'IRAO', name: 'Интер РАО' },
+  { symbol: 'MOEX', name: 'Мосбиржа' },
+  { symbol: 'VTBR', name: 'ВТБ' },
+  { symbol: 'AFLT', name: 'Аэрофлот' },
+  { symbol: 'YDEX', name: 'Яндекс' },
+  { symbol: 'OZON', name: 'Озон' },
+  { symbol: 'T', name: 'Т-Технологии' },
+  { symbol: 'POSI', name: 'Positive Technologies' },
+  { symbol: 'FIVE', name: 'X5' },
+]
+
+export function ruLiquidInstruments(): InstrumentRef[] {
+  return RU_LIQUID_SHARES.map((row) => ({
+    symbol: row.symbol,
+    name: row.name,
+    form: 'spot',
+    assetClass: 'equity',
+  }))
+}
 
 export interface Config {
   enabled: boolean
@@ -179,11 +224,13 @@ export class TBankMarketDataService extends Service implements MarketDataService
     return this.client.getOrderbook(symbol, depth, await this.requireCreds())
   }
 
+  async listInstruments(): Promise<InstrumentRef[]> {
+    return ruLiquidInstruments()
+  }
+
   klineCapabilities?() {
-    return {
-      intervals: [...INTERVAL_VOCABULARY],
-      maxBars: 1500,
-    }
+    // 声明「翻页后」可承接的深度（getKlines 按 INTERVAL_MAX_WINDOW_MS 切片聚合）。
+    return INTERVAL_VOCABULARY.map((interval) => ({ interval, maxBars: 1500 as const }))
   }
 
   subscribeTicker(symbol: string, cb: (ticker: Ticker) => void, options?: { intervalMs?: number }): Disposable {

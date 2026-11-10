@@ -29,6 +29,7 @@ import { fmtAxis, priceDigits } from './format.ts'
 import { AXIS_FONT_FAMILY, AXIS_FONT_SIZE, AXIS_SCALE_MARGIN, axisMinimumWidth, percentAxisRef, percentLabel, percentLabelCandidates } from './axis-width.ts'
 import { getColorPalette, type ColorMode } from './color-mode.ts'
 import { resolveHistogramBarColor, resolveOutputColor } from './indicator-color.ts'
+import { ruIndicatorLabel } from './indicator-labels.ts'
 import { isDarkTheme, useDarkTheme } from './theme-mode.ts'
 import { chartXToContainerX, containerXToChartX, visibleDayMarkXs } from './chart-coordinate.ts'
 import { fiveDayWheelStep, viewportResetStrategy } from './five-day-series.ts'
@@ -981,7 +982,7 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
         if (isPlaceholderGroup(group)) {
           return (
             <div key={group.key} style={{ position: 'absolute', left: 8, top: top + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, display: 'flex', gap: 8 }}>
-              <IndicatorPaneTitle title={group.title} />
+              <IndicatorPaneTitle title={ruIndicatorLabel(group.title)} />
               <span style={{ color: 'var(--dsw-futu-text-tertiary, #8a919c)', fontWeight: 500 }}>{group.emptyNotice}</span>
             </div>
           )
@@ -989,13 +990,13 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
         if (readoutIndex === null) return null
         return (
           <div key={group.key} style={{ position: 'absolute', left: 8, top: top + 4, zIndex: 2, pointerEvents: 'none', fontSize: 10.5, fontFamily: monoFont, display: 'flex', gap: 8 }}>
-            <IndicatorPaneTitle title={group.title} live={group.live} liveText={props.liveText} />
+            <IndicatorPaneTitle title={ruIndicatorLabel(group.title)} live={group.live} liveText={props.liveText} />
             {group.outputs.map((output) => {
               const value = output.values[readoutIndex]
               if (value === undefined || !Number.isFinite(value)) return null
               return (
                 <span key={output.key} style={{ color: resolveOutputColor(output, dark), fontWeight: 500 }}>
-                  {output.key}: {value.toFixed(output.precision ?? 2)}
+                  {ruIndicatorLabel(output.key)}: {value.toFixed(output.precision ?? 2)}
                 </span>
               )
             })}

@@ -97,7 +97,34 @@ const INTERVAL_MS: Record<Interval, number> = {
   '1M': 30 * 24 * 60 * 60_000,
 }
 
+/**
+ * GetCandles 单次请求允许的最大时间窗（官方 FAQ，错误码 30014）。
+ * @see https://tinkoff.github.io/investAPI/faq_marketdata/
+ */
+export const INTERVAL_MAX_WINDOW_MS: Record<Interval, number> = {
+  '1m': 1 * 24 * 60 * 60_000,
+  '5m': 1 * 24 * 60 * 60_000,
+  '15m': 1 * 24 * 60 * 60_000,
+  '30m': 2 * 24 * 60 * 60_000,
+  '1h': 7 * 24 * 60 * 60_000,
+  '4h': 30 * 24 * 60 * 60_000,
+  '1d': 365 * 24 * 60 * 60_000,
+  '1w': 2 * 365 * 24 * 60 * 60_000,
+  '1M': 10 * 365 * 24 * 60 * 60_000,
+}
+
+/** 单次 getKlines 最多翻页次数（防上游空响应死循环）。 */
+const KLINES_MAX_PAGES = 24
+
 export const INTERVAL_VOCABULARY = Object.keys(INTERVAL_TO_TBANK) as Interval[]
+
+/** 单次 GetCandles 窗口内大约能装下的 bar 数（用于 klineCapabilities）。 */
+export function maxBarsForInterval(interval: Interval): number {
+  const step = INTERVAL_MS[interval]
+  const window = INTERVAL_MAX_WINDOW_MS[interval]
+  if (!step || !window) return 1
+  return Math.max(1, Math.floor(window / step))
+}
 
 /** order_id 幂等键：UID，最大 36 字符（PostOrder.orderId）。 */
 export const TBANK_ORDER_ID_RULE = { prefix: 'dsht', maxLength: 36 } as const
@@ -405,29 +432,59 @@ export class TBankRestClient {
     if (!candleInterval) {
       throw new TradingServiceError('TRADING_UNSUPPORTED_INTERVAL', `T-Bank: unsupported interval ${interval}`)
     }
+    const stepMs = INTERVAL_MS[interval]
+    const maxWindowMs = INTERVAL_MAX_WINDOW_MS[interval]
+    if (!stepMs || !maxWindowMs) {
+      throw new TradingServiceError('TRADING_UNSUPPORTED_INTERVAL', `T-Bank: unsupported interval ${interval}`)
+    }
+    // 跨页聚合上限：官方单窗 bar 数有限，GUI 常要 750 根日 K → 必须翻页。
     const capped = Math.max(1, Math.min(limit, 1500))
-    const to = Date.now()
-    const from = to - capped * INTERVAL_MS[interval]
-    const data = await this.request(
-      'MarketDataService',
-      'GetCandles',
-      {
-        instrumentId: instrument.uid || instrument.figi,
-        from: new Date(from).toISOString(),
-        to: new Date(to).toISOString(),
-        interval: candleInterval,
-      },
-      credentials,
-    )
-    const candles = Array.isArray(data.candles) ? (data.candles as JsonRecord[]) : []
-    return candles.slice(-capped).map((c) => ({
-      timestamp: typeof c.time === 'string' ? Date.parse(c.time) || 0 : 0,
-      open: quotationToNumber(c.open),
-      high: quotationToNumber(c.high),
-      low: quotationToNumber(c.low),
-      close: quotationToNumber(c.close),
-      volume: Number(c.volume ?? 0),
-    }))
+    const instrumentId = instrument.uid || instrument.figi
+    const byOpen = new Map<number, Kline>()
+    let cursorTo = Date.now()
+    const earliestNeeded = cursorTo - capped * stepMs
+
+    for (let page = 0; page < KLINES_MAX_PAGES && byOpen.size < capped; page += 1) {
+      const cursorFrom = Math.max(earliestNeeded, cursorTo - maxWindowMs)
+      if (cursorFrom >= cursorTo) break
+      const data = await this.request(
+        'MarketDataService',
+        'GetCandles',
+        {
+          instrumentId,
+          from: new Date(cursorFrom).toISOString(),
+          to: new Date(cursorTo).toISOString(),
+          interval: candleInterval,
+        },
+        credentials,
+      )
+      const candles = Array.isArray(data.candles) ? (data.candles as JsonRecord[]) : []
+      if (candles.length === 0) break
+
+      let pageEarliest = Number.POSITIVE_INFINITY
+      for (const c of candles) {
+        const openTime = typeof c.time === 'string' ? Date.parse(c.time) || 0 : 0
+        if (!Number.isFinite(openTime) || openTime <= 0) continue
+        pageEarliest = Math.min(pageEarliest, openTime)
+        byOpen.set(openTime, {
+          openTime,
+          open: quotationToNumber(c.open),
+          high: quotationToNumber(c.high),
+          low: quotationToNumber(c.low),
+          close: quotationToNumber(c.close),
+          volume: Number(c.volume ?? 0),
+          closeTime: openTime + stepMs - 1,
+        })
+      }
+      if (!Number.isFinite(pageEarliest)) break
+      // 下一页接到本页最早一根之前，避免重叠整窗空转。
+      cursorTo = pageEarliest - 1
+      if (cursorTo <= earliestNeeded) break
+    }
+
+    return [...byOpen.values()]
+      .sort((a, b) => a.openTime - b.openTime)
+      .slice(-capped)
   }
 
   async getBalance(credentials: TBankCredentials): Promise<AccountBalance> {

@@ -21,7 +21,7 @@ import { intradayCandidates, intradayRequest, selectIntradaySeries } from './int
 import { publishMarketProviders } from './market-providers.ts'
 import { colorModeStore } from './color-mode.ts'
 import { entryForm, entryMeta, formBadgeKey, resolveAssetClass, type InstrumentMeta } from './instrument-meta.ts'
-import { MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
+import { filterSidebarMarkets, MARKET_TAB_KEY, normalizeSymbolInput, SIDEBAR_MARKETS } from './market-vocab.ts'
 import { Sparkline } from './Sparkline.tsx'
 import { IconChevronDown, IconFolder, IconFoldPanel, IconPin, IconSettings, IconUpdate } from './icons.tsx'
 import { GroupMenu, GroupMembershipPopover, type GroupCreateOutcome, type GroupPopoverAnchor } from './WatchlistGroups.tsx'
@@ -148,7 +148,7 @@ export function MarketSidebar({
   const [prices, setPrices] = useState<Record<string, Ticker>>({})
   const [series, setSeries] = useState<Record<string, ReferenceSeries>>({})
   const [draft, setDraft] = useState('')
-  const [addMarket, setAddMarket] = useState<MarketId>('crypto')
+  const [addMarket, setAddMarket] = useState<MarketId>(SIDEBAR_MARKETS[0] ?? 'ru')
   /** 形态过滤（2026-10-08 加密永续 P5）：仅 crypto 目标市场生效，缺省「全部」= 不过滤。 */
   const [formFilter, setFormFilter] = useState<'all' | InstrumentForm>('all')
   const [catalogVersion, setCatalogVersion] = useState(0)
@@ -173,7 +173,12 @@ export function MarketSidebar({
   const reloadMarkets = useRef((): void => {})
   reloadMarkets.current = () => {
     fetchMarkets()
-      .then((infos) => { setMarkets(infos); setLoadError(false); publishMarketProviders(infos) })
+      .then((infos) => {
+        const visible = filterSidebarMarkets(infos)
+        setMarkets(visible)
+        setLoadError(false)
+        publishMarketProviders(infos)
+      })
       .catch(() => { setLoadError(true) })
   }
   useEffect(() => { reloadMarkets.current() }, [])
@@ -185,7 +190,7 @@ export function MarketSidebar({
 
   // 动态标的全集预取（Issue #15）：切页签或挂载时触发，成功后注入 catalog 并刷新联想
   useEffect(() => {
-    const targetMarkets: MarketId[] = tab === 'watch' ? ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru'] : [tab]
+    const targetMarkets: MarketId[] = tab === 'watch' ? [...SIDEBAR_MARKETS] : [tab]
     let cancelled = false
     for (const m of targetMarkets) {
       fetchSymbols(m)
@@ -300,7 +305,7 @@ export function MarketSidebar({
 
     let cancelled = false
     const timer = setTimeout(() => {
-      const targetMarkets: MarketId[] = tab === 'watch' ? ['cn', 'hk', 'us', 'crypto', 'futures', 'global', 'ru'] : [tab]
+      const targetMarkets: MarketId[] = tab === 'watch' ? [...SIDEBAR_MARKETS] : [tab]
       for (const m of targetMarkets) {
         fetchSymbols(m, raw)
           .then((items) => {
@@ -767,9 +772,9 @@ export function MarketSidebar({
                   className={css.addMarketToggle}
                   title={t('sidebar.addMarketHint')}
                   onClick={() => {
-                    const order: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru']
+                    const order: MarketId[] = [...SIDEBAR_MARKETS]
                     const index = order.indexOf(addMarket)
-                    setAddMarket(order[(index + 1) % order.length] ?? 'crypto')
+                    setAddMarket(order[(index + 1) % order.length] ?? order[0] ?? 'ru')
                   }}
                 >
                   {t(MARKET_TAB_KEY[addMarket])}

@@ -17,6 +17,19 @@ export const MARKET_TAB_KEY: Record<MarketId, MarketLocaleKey> = {
   ru: 'tab.ru',
 }
 
+/**
+ * 左栏可见市场（自选页签 + 添加目标循环）。本仓桌面默认只露俄股 `ru`
+ * （T-Bank / MOEX）；其它市场仍可装 bundle，但不进侧栏页签，避免种子自选
+ * 把 crypto/us 顶到「Избранное」里。
+ */
+export const SIDEBAR_MARKETS: readonly MarketId[] = ['ru']
+
+/** 宿主 /markets 回包按 SIDEBAR_MARKETS 收窄（保序）。 */
+export function filterSidebarMarkets<T extends { id: string }>(infos: readonly T[]): T[] {
+  const allow = new Set<string>(SIDEBAR_MARKETS)
+  return infos.filter((info) => allow.has(info.id))
+}
+
 const KNOWN_SH_INDICES = new Set(['000688', '000300', '000016', '000905', '000852'])
 
 const CRYPTO_MARKERS = ['USDT', 'USDC', 'BTC', 'ETH']

@@ -13,7 +13,7 @@ import type { Observable, WatchlistGroupOpResult, WatchlistGroupsState, Watchlis
 import { rowsFor } from './store.ts'
 import type { Instrument, MarketId } from './types.ts'
 import { entryMeta, formBadgeKey, resolveAssetClass, type InstrumentMeta } from './instrument-meta.ts'
-import { inferInputMarket, MARKET_TAB_KEY, normalizeSymbolInput } from './market-vocab.ts'
+import { filterSidebarMarkets, inferInputMarket, MARKET_TAB_KEY, normalizeSymbolInput, SIDEBAR_MARKETS } from './market-vocab.ts'
 import { IconClose, IconPlus, IconRename, IconTrash } from './icons.tsx'
 import { GroupMembershipPopover } from './WatchlistGroups.tsx'
 import css from './watchlist-manager.module.css'
@@ -36,7 +36,7 @@ export interface WatchlistManagerInjected {
 
 export type WatchlistManagerProps = PropsLocale<'dshtrading.market'> & InjectFace<WatchlistManagerInjected>
 
-const FALLBACK_MARKETS: MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru']
+const FALLBACK_MARKETS: MarketId[] = [...SIDEBAR_MARKETS]
 
 export function WatchlistManager({
   t, useWatchlists, useWatchlistGroups, addInstrument, removeInstrument,
@@ -62,7 +62,11 @@ export function WatchlistManager({
   useEffect(() => {
     let cancelled = false
     fetchMarkets()
-      .then(infos => { if (!cancelled && infos.length > 0) setMarkets(infos.map(info => info.id)) })
+      .then(infos => {
+        if (!cancelled && infos.length > 0) {
+          setMarkets(filterSidebarMarkets(infos).map(info => info.id as MarketId))
+        }
+      })
       .catch(() => {})
     return () => { cancelled = true }
   }, [])

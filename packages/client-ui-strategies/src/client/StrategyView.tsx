@@ -30,13 +30,28 @@ import { ScreenerPane } from './ScreenerPane.tsx'
 import { StrategyEditor, type StrategyEditorSaveInput } from './StrategyEditor.tsx'
 import type { StrategyLocaleKey } from './contract.ts'
 import {
-  strategyName, strategySummary, paramLabel,
+  strategyName, strategySummary, strategyHowto, paramLabel,
   exitReasonText,
 } from './strategy-locale.ts'
+import { stanceOf } from './signal-brief.ts'
+import { advise, type InvestorAction } from './investor-advice.ts'
 export { strategyName, strategySummary, paramLabel, exitReasonText } from './strategy-locale.ts'
 import css from './StrategyView.module.css'
 
-type StrategySection = 'screener' | 'quant'
+type StrategySection = 'screener' | 'quant' | 'insight'
+
+const INSIGHT_ACTION: Record<InvestorAction, StrategyLocaleKey> = {
+  buy: 'sv.insight.action.buy',
+  hold: 'sv.insight.action.hold',
+  reduce: 'sv.insight.action.reduce',
+  watch: 'sv.insight.action.watch',
+}
+const INSIGHT_ACTION_HINT: Record<InvestorAction, StrategyLocaleKey> = {
+  buy: 'sv.insight.actionHint.buy',
+  hold: 'sv.insight.actionHint.hold',
+  reduce: 'sv.insight.actionHint.reduce',
+  watch: 'sv.insight.actionHint.watch',
+}
 
 interface StrategyStateStored {
   section?: StrategySection
@@ -96,8 +111,8 @@ export interface StrategyViewProps {
 
 export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   const instrument = useSelection ? useSelection((s) => s.instrument) : null
-  const market = instrument?.market ?? 'crypto'
-  const symbol = instrument?.symbol ?? 'BTCUSDT'
+  const market = instrument?.market ?? 'ru'
+  const symbol = instrument?.symbol ?? ''
 
   // 1. 本地存储持久化状态
   const [stored] = useState<StrategyStateStored>(() => {
@@ -106,7 +121,9 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
 
   // section 白名单：旧存档缺省 quant；手改出的脏值回落 quant，避免渲染出
   // 「头部选择器隐藏但量化内容还在」的半套 UI
-  const [section, setSection] = useState<StrategySection>(stored.section === 'screener' ? 'screener' : 'quant')
+  const [section, setSection] = useState<StrategySection>(
+    stored.section === 'screener' || stored.section === 'insight' ? stored.section : 'quant',
+  )
   const [horizon, setHorizon] = useState<StrategyHorizon>(stored.horizon ?? 'short')
   const [selectedId, setSelectedId] = useState<string>(stored.strategyId ?? 'donchian-breakout')
   const [paramsMap, setParamsMap] = useState<Record<string, Record<string, number>>>(stored.paramsMap ?? {})
@@ -193,6 +210,9 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
     return res
   }, [currentStrategy, paramsMap])
 
+  const [insightRows, setInsightRows] = useState<Array<{ id: string; horizon: StrategyHorizon; stance: 'long' | 'flat'; name: string; howto: string }>>([])
+  const [advice, setAdvice] = useState<InvestorAction | null>(null)
+
   // 3. 回测运行状态
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<BacktestResult | null>(null)
@@ -202,6 +222,14 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
   const chartApiRef = useRef<IChartApi | null>(null)
   const seriesApiRef = useRef<ISeriesApi<'Area'> | null>(null)
+
+  // 换标的后丢掉上一只的回测/综述，避免屏幕上还是 BTCUSDT 的结果。
+  useEffect(() => {
+    setResult(null)
+    setInsightRows([])
+    setAdvice(null)
+    setErrorMsg(null)
+  }, [market, symbol])
 
   // 同步持久化
   useEffect(() => {
@@ -272,8 +300,61 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
   }
 
   // 运行回测（拉取 300 根日 K，对齐各主流交易所如 OKX 单次 300 根上限，并保障 250 根长线策略有充足样本窗口）
+  const handleInsight = async () => {
+    if (symbol === '') {
+      setErrorMsg(t('sv.noInstrument'))
+      setInsightRows([])
+      setAdvice(null)
+      return
+    }
+    setLoading(true)
+    setErrorMsg(null)
+    try {
+      const barsRaw = await stableBridge.fetchKlines(market, symbol, '1d', 300)
+      if (!barsRaw || barsRaw.length === 0) {
+        setErrorMsg(t('sv.error.noKlines'))
+        setInsightRows([])
+        setAdvice(null)
+        return
+      }
+      const klines: Kline[] = barsRaw.map((b) => ({
+        openTime: b.openTime,
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+        volume: b.volume,
+      }))
+      const rows = allStrategies.map((definition) => {
+        const params: Record<string, number> = {}
+        for (const spec of definition.params) params[spec.key] = spec.default
+        const result = run(klines, definition, params)
+        return {
+          id: definition.id,
+          horizon: definition.horizon,
+          stance: stanceOf(result.signals),
+          name: strategyName(definition, t),
+          howto: strategyHowto(definition, t),
+        }
+      })
+      setInsightRows(rows)
+      setAdvice(advise(rows))
+    } catch (e) {
+      setErrorMsg(`${t('sv.error.failed')}: ${String((e as Error)?.message ?? e)}`)
+      setInsightRows([])
+      setAdvice(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleRunBacktest = async () => {
     if (currentStrategy === null) return
+    if (symbol === '') {
+      setErrorMsg(t('sv.noInstrument'))
+      setResult(null)
+      return
+    }
     setLoading(true)
     setErrorMsg(null)
     try {
@@ -410,10 +491,19 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
           >
             {t('sv.section.quant')}
           </button>
+          <button
+            type="button"
+            className={css.horizonBtn}
+            data-active={section === 'insight' ? 'true' : undefined}
+            onClick={() => setSection('insight')}
+          >
+            {t('sv.section.insight')}
+          </button>
         </div>
 
         {section === 'quant' && (
           <>
+            <div className={css.cardSummary}>{symbol === '' ? t('sv.noInstrument') : t('sv.quant.hint', { symbol })}</div>
             {/* 2b-1. 周期分段 + 新建策略 */}
             <div className={css.mgmtRow}>
               <div className={css.horizonSelector} role="tablist">
@@ -471,6 +561,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
                       </span>
                     </div>
                     <div className={css.cardSummary}>{strategySummary(strat, t)}</div>
+                    {strategyHowto(strat, t) !== '' && <div className={css.cardSummary}>{strategyHowto(strat, t)}</div>}
                     {mgmtAvailable && (
                       <div className={css.cardActions} onClick={(e) => e.stopPropagation()}>
                         <button type="button" className={css.cardActionBtn} onClick={() => handleEditStrategy(strat)}>
@@ -516,6 +607,38 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
       {section === 'screener' ? (
         /* 2a. 选股策略面板 */
         <ScreenerPane t={t} market={market} bridge={stableBridge} />
+      ) : section === 'insight' ? (
+        <div className={css.tableSection}>
+          <div className={css.cardSummary}>{symbol === '' ? t('sv.noInstrument') : t('sv.insight.lead', { symbol })}</div>
+          <div className={css.configBar}>
+            <button type="button" className={css.runBtn} disabled={loading || symbol === ''} onClick={() => { void handleInsight() }}>
+              {loading ? t('sv.insight.running') : t('sv.insight.run')}
+            </button>
+          </div>
+          {errorMsg !== null && <div className={css.errorMessage}>{errorMsg}</div>}
+          {advice !== null && (
+            <div className={css.strategyCard} data-active="true">
+              <div className={css.cardTitle}>{t(INSIGHT_ACTION[advice])}</div>
+              <div className={css.cardSummary}>{t(INSIGHT_ACTION_HINT[advice])}</div>
+            </div>
+          )}
+          {insightRows.length > 0 && (
+            <div className={css.strategyCards}>
+              {insightRows.map((row) => (
+                <div key={row.id} className={css.strategyCard}>
+                  <div className={css.cardTitle}>{row.name}</div>
+                  <div className={css.cardSummary}>
+                    {t(row.horizon === 'short' ? 'sv.horizon.short' : row.horizon === 'swing' ? 'sv.horizon.swing' : 'sv.horizon.long')}
+                    {' · '}
+                    {row.stance === 'long' ? t('sv.insight.long') : t('sv.insight.flat')}
+                  </div>
+                  {row.howto !== '' && <div className={css.cardSummary}>{row.howto}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          <div className={css.cardSummary}>{t('sv.insight.disclaimer')}</div>
+        </div>
       ) : currentStrategy === null ? (
         /* 名册为空（全部内置已删且无自定义，策略管理边界）→ 空态 */
         <div className={css.emptyState}>
@@ -551,14 +674,14 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
         <div className={css.paramGroup}>
           <span className={css.paramLabel}>{t('sv.symbolLabel')}</span>
           <span className={css.symbolValue}>
-            {symbol} {t('sv.intervalDaily')}
+            {symbol === '' ? t('sv.noInstrument') : <>{symbol} {t('sv.intervalDaily')}</>}
           </span>
         </div>
 
         <button
           type="button"
           className={css.runBtn}
-          disabled={loading}
+          disabled={loading || symbol === ''}
           onClick={handleRunBacktest}
         >
           {loading ? t('sv.running') : t('sv.run')}

@@ -25,6 +25,7 @@ import { OrderPanel } from './OrderPanel.tsx'
 import { paperTradingStore } from './paper-trading-store.ts'
 import { computeRangeStats } from './range-stats.ts'
 import { readoutItems } from './indicator-readout.ts'
+import { ruIndicatorLabel } from './indicator-labels.ts'
 import {
   addKdasDay, clampRectInto, formatKdasDay, isKdasDay, kdasAnchorSourceDay, kdasOutputKey, kdasSlots,
   removeKdasDay, utcDayNum,
@@ -1271,7 +1272,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
         <div className={css.indicatorReadout}>
           {readoutItems(mainOverlays, readoutIndex).map(item => (
             <span key={item.key} style={{ color: item.color, fontWeight: 500 }}>
-              {item.title} {item.label}:{' '}
+              {ruIndicatorLabel(item.title)} {ruIndicatorLabel(item.label)}:{' '}
               <span className={css.readoutValue} style={{ minWidth: `${item.width}ch` }}>{item.text}</span>
             </span>
           ))}
@@ -1562,9 +1563,9 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 className={css.quickIndicatorTag}
                 data-active={active ? 'true' : undefined}
                 onClick={() => toggleIndicatorVisible(def.id)}
-                title={`${def.title} (${def.pane === 'main' ? t('indicator.group.main') : t('indicator.group.sub')})`}
+                title={`${ruIndicatorLabel(def.title)} (${def.pane === 'main' ? t('indicator.group.main') : t('indicator.group.sub')})`}
               >
-                {def.title}
+                {ruIndicatorLabel(def.title)}
               </button>
             )
           })}
@@ -1775,7 +1776,7 @@ function PickerGroup(props: {
                 checked={visible !== null}
                 onChange={() => onToggle(definition.id)}
               />
-              <span>{definition.title}</span>
+              <span>{ruIndicatorLabel(definition.title)}</span>
             </label>
             {visible !== null && (
               <button
@@ -1961,7 +1962,7 @@ function IndicatorParamEditor(props: {
       {props.overrideHint !== undefined && <div className={css.paramHint}>{props.overrideHint}</div>}
       {definition.params.map(spec => (
         <label key={spec.key} className={css.paramRow}>
-          <span>{spec.label}</span>
+          <span>{ruIndicatorLabel(spec.label)}</span>
           <input
             type="number"
             min={spec.min}

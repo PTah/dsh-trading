@@ -56,9 +56,9 @@ import { TtlCache } from './ttl-cache.ts'
 import { mergeActiveBuyPoints, readActiveBuySnapshots, shanghaiDate, type ActiveBuyWire } from './active-buy.ts'
 
 /** 本桥支持的市场（与连接器服务键一一对应）。 */
-export type MarketId = 'crypto' | 'us' | 'cn' | 'hk' | 'futures' | 'global'
+export type MarketId = 'crypto' | 'us' | 'cn' | 'hk' | 'futures' | 'global' | 'ru'
 
-export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global']
+export const MARKET_IDS: readonly MarketId[] = ['crypto', 'us', 'cn', 'hk', 'futures', 'global', 'ru']
 
 /** market → Context 服务键（@dshtrading/api 的 Context 增强）。 */
 export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
@@ -68,6 +68,7 @@ export const MARKET_SERVICE_KEYS: Record<MarketId, string> = {
   hk: 'tradingHkMarketData',
   futures: 'tradingFuturesMarketData',
   global: 'tradingGlobalMarketData',
+  ru: 'tradingRuMarketData',
 }
 
 /** 注册表服务的最小形状（鸭式，与 @dshtrading/router 的 MarketDataRegistryLike 同构）。 */
@@ -879,7 +880,7 @@ function isHoldingMarket(value: string): value is HoldingMarket {
 export const SYMBOLS_CACHE_TTL_MS = 30 * 60 * 1000
 
 /**
- * 动态标的全集缓存条目上限：键 = market，键空间 = 市场全集（当前 6），取全集长度
+ * 动态标的全集缓存条目上限：键 = market，键空间 = 市场全集（当前 7），取全集长度
  * 即与改动前的裸 Map「永不驱逐」等价——上限只是 TtlCache 的必要参数，不是驱逐策略。
  */
 export const SYMBOLS_CACHE_MAX = MARKET_IDS.length

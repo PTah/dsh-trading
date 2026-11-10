@@ -367,6 +367,7 @@ export function ScreenerPane({ t, market, bridge }: ScreenerPaneProps) {
 
   return (
     <>
+      <div className={css.cardSummary}>{t('sv.screener.how')}</div>
       {/* 工具行：新建选股器（管理面可用时） */}
       {hasManagement && (
         <div className={css.mgmtRow}>

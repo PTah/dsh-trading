@@ -109,7 +109,7 @@ export function MiddleStage({ t, useSelection, useChart, toggleIndicator, setInd
           const definition = stageViews.get(view)
           if (definition === undefined) return null
           const View = definition.render
-          return <View t={t} view={view} />
+          return <View t={t} view={view} useSelection={useSelection} />
         })()
       )}
     </div>

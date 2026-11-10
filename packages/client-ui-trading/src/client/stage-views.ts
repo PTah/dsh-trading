@@ -22,6 +22,11 @@ export interface StageViewProps {
   t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
   /** 中栏当前视图 id（useSyncExternalStore 驱动的响应式值）。 */
   view: string
+  /**
+   * 左栏当前标的（与行情页同一条 selection）。插件视图用它跟着手动点选，
+   * 缺省时不要自己猜 BTCUSDT。
+   */
+  useSelection?: <T>(selector: (state: { instrument: { market: string; symbol: string; name?: string } | null }) => T) => T
 }
 
 /**
