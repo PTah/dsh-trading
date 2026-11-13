@@ -39,6 +39,11 @@
   font-size: 13px;
 }
 
+.botLog {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
 .robotBanner {
   margin: 0;
   padding: 6px 16px;

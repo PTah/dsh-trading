@@ -13,6 +13,11 @@ import {
   type BotPosition,
   type BotReview,
 } from '@dshtrading/strategies'
+import { fileBotOrders } from './bot-file.ts'
+import { appendBotLog, BOT_LOG_KEY, botLogEntry, failedBotLogEntry, sanitizeBotLog, type BotLogEntry, type BotLogMark } from './bot-log.ts'
+import { readJson, writeJson } from './shell-faces.ts'
+
+const BOOK_KEY = 'dshtrading.bot.book.v1'
 
 const WATCH_MS = 30 * 60 * 1000
 const SHARE_LIMIT = 30
@@ -33,6 +38,7 @@ interface KlineWire {
 export interface RobotBridge {
   fetchKlines: (market: string, symbol: string, interval: string, limit: number) => Promise<KlineWire[]>
   fetchSymbols: (market: string) => Promise<Array<{ symbol: string; name?: string; listing?: string }>>
+  placeBotDryRunOrder?: (input: { symbol: string; side: 'buy' | 'sell'; quantity: number }) => Promise<{ order?: unknown; error?: string }>
   fetchTickers?: (market: string, symbols: string[]) => Promise<Record<string, {
     ok?: boolean
     ticker?: {
@@ -57,27 +63,37 @@ export interface BondLadder {
 
 export interface RobotSnap {
   reviews: BotReview[] | null
+  book: BotPosition[]
   ladders: Record<string, BondLadder>
   skippedFunds: number
   watching: boolean
   busy: boolean
   failed: boolean
   checkedAt: number | null
+  log: BotLogEntry[]
+}
+
+function loadBook(): BotPosition[] {
+  const raw = readJson<BotPosition[]>(BOOK_KEY, [])
+  return Array.isArray(raw) ? raw.filter(row => typeof row?.symbol === 'string' && row.symbol !== '') : []
 }
 
 const listeners = new Set<() => void>()
+let book: BotPosition[] = loadBook()
 let snap: RobotSnap = {
   reviews: null,
+  book,
   ladders: {},
   skippedFunds: 0,
   watching: false,
   busy: false,
   failed: false,
   checkedAt: null,
+  log: sanitizeBotLog(readJson<unknown>(BOT_LOG_KEY, [])),
 }
 let bridge: RobotBridge | null = null
-let book: BotPosition[] = []
 let timer: ReturnType<typeof setInterval> | null = null
+let gate = false
 
 function emit(): void {
   for (const listener of listeners) listener()
@@ -86,6 +102,27 @@ function emit(): void {
 function patch(partial: Partial<RobotSnap>): void {
   snap = { ...snap, ...partial }
   emit()
+}
+
+function remember(entry: BotLogEntry): BotLogEntry[] {
+  const log = appendBotLog(snap.log, entry)
+  writeJson(BOT_LOG_KEY, log)
+  return log
+}
+
+function keepBook(next: BotPosition[], sent: number): void {
+  book = next
+  if (sent > 0) writeJson(BOOK_KEY, next)
+}
+
+async function fileHeld(
+  reviews: readonly BotReview[],
+  source: RobotBridge,
+): Promise<{ reviews: BotReview[]; mark: BotLogMark | undefined }> {
+  const filed = await fileBotOrders(reviews, book, moexEquitySession(), source.placeBotDryRunOrder)
+  keepBook(filed.book, filed.sent)
+  const mark = filed.orderNote === 'idle' ? undefined : { orderNote: filed.orderNote, sent: filed.sent, due: filed.due }
+  return { reviews: filed.reviews, mark }
 }
 
 async function mapPool<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
@@ -131,8 +168,9 @@ async function laddersFor(source: RobotBridge, reviews: readonly BotReview[]): P
   }
 }
 
-async function run(source: RobotBridge, held: readonly BotPosition[]): Promise<void> {
-  if (snap.busy) return
+async function run(source: RobotBridge, held: readonly BotPosition[], sourceKind: BotLogEntry['source']): Promise<void> {
+  if (snap.busy || gate) return
+  gate = true
   patch({ busy: true, failed: false })
   try {
     const symbols = await source.fetchSymbols('ru')
@@ -165,17 +203,24 @@ async function run(source: RobotBridge, held: readonly BotPosition[]): Promise<v
     })
     const reviews = reviewBotBook(candidates, held)
     const ladders = await laddersFor(source, reviews)
+    const filed = await fileHeld(reviews, source)
+    const checkedAt = Date.now()
     patch({
-      reviews,
+      reviews: filed.reviews,
+      book,
       ladders,
       skippedFunds: dormant.length,
       watching: true,
       busy: false,
       failed: false,
-      checkedAt: Date.now(),
+      checkedAt,
+      log: remember(botLogEntry(checkedAt, sourceKind, reviews, filed.mark)),
     })
   } catch {
-    patch({ busy: false, failed: true })
+    const checkedAt = Date.now()
+    patch({ busy: false, failed: true, checkedAt, log: remember(failedBotLogEntry(checkedAt, sourceKind)) })
+  } finally {
+    gate = false
   }
 }
 
@@ -184,7 +229,7 @@ function ensureTimer(): void {
   timer = setInterval(() => {
     if (!snap.watching || bridge === null) return
     if (moexEquitySession() !== 'trading') return
-    void run(bridge, book)
+    void run(bridge, book, 'auto')
   }, WATCH_MS)
 }
 
@@ -196,13 +241,29 @@ export const robotSession = {
   get(): RobotSnap {
     return snap
   },
-  holdBook(next: readonly BotPosition[]): void {
-    book = [...next]
-  },
-  check(nextBridge: RobotBridge, nextBook: readonly BotPosition[]): Promise<void> {
+  check(nextBridge: RobotBridge): Promise<void> {
     bridge = nextBridge
-    book = [...nextBook]
     ensureTimer()
-    return run(nextBridge, nextBook)
+    return run(nextBridge, book, 'manual')
+  },
+  async file(): Promise<BotLogMark['orderNote'] | 'idle'> {
+    if (bridge === null || snap.reviews === null || snap.busy || gate) return 'idle'
+    gate = true
+    try {
+      const reviews = snap.reviews
+      const filed = await fileHeld(reviews, bridge)
+      if (filed.mark === undefined) {
+        patch({ book })
+        return 'idle'
+      }
+      patch({
+        reviews: filed.reviews,
+        book,
+        log: remember(botLogEntry(Date.now(), 'manual', reviews, filed.mark)),
+      })
+      return filed.mark.orderNote
+    } finally {
+      gate = false
+    }
   },
 }

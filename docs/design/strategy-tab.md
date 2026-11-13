@@ -23,7 +23,7 @@
 
 **非目标（Out of scope）**
 
-- 实盘自动下单循环仍不做。日线机器人是单独的 dry-run 站（见 [2026-11-10-moex-bot-station](../../.agents/notes/implemented/feature/2026-11-10-moex-bot-station.md)）：只发 `dryRun: true`，不打开 liveTrading；
+- 实盘自动下单循环仍不做。日线机器人是单独的 dry-run 站（见 [2026-11-10-moex-bot-station](../../.agents/notes/implemented/feature/2026-11-10-moex-bot-station.md)）：开市时段的检查自己提交股票模拟单，只发 `dryRun: true`，不打开 liveTrading；
 - 参数优化器、机器学习、walk-forward 分析；
 - 多标的组合回测、现金流（定投）语义（留 v2）；
 - 服务端/长历史回测（v1 全部在浏览器端完成，数据经既有 bridge）。

@@ -1,26 +1,23 @@
 /**
  * Станция робота на вкладке «Стратегии».
  * Проверка читает дневные свечи первых акций из списка «Россия».
- * Учебная заявка всегда dry-run. Книга лежит отдельно от избранного.
+ * В открытую сессию проверка сама пишет учебную заявку по акции.
+ * Учебная заявка всегда dry-run и на биржу не уходит. Книга лежит отдельно от избранного.
  */
 import { Fragment, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
-  applyBotFill,
   moexEquitySession,
   moexNextTradingOpen,
   type BotKind,
-  type BotPosition,
   type BotReason,
   type BotReview,
   type BotVerdict,
   type MoexSession,
 } from '@dshtrading/strategies'
+import type { BotLogEntry, BotLogHit } from './bot-log.ts'
 import { robotSession, type BondLadder } from './robot-session.ts'
-import { readJson, writeJson } from './shell-faces.ts'
 import type { StrategyLocaleKey } from './contract.ts'
 import css from './StrategyView.module.css'
-
-const BOOK_KEY = 'dshtrading.bot.book.v1'
 
 type Translate = (key: StrategyLocaleKey, params?: Record<string, unknown>) => string
 
@@ -59,6 +56,72 @@ const SESSION_KEY: Record<MoexSession, StrategyLocaleKey> = {
   trading: 'sv.bot.sessionOpen',
   closed: 'sv.bot.sessionClosed',
   auction: 'sv.bot.sessionAuction',
+}
+
+const LOG_HIT_KEY: Record<BotLogHit['verdict'], StrategyLocaleKey> = {
+  buy: 'sv.bot.buy',
+  add: 'sv.bot.add',
+  sell: 'sv.bot.sell',
+  'bond-add': 'sv.bot.bondAdd',
+  'fund-entry': 'sv.bot.fundEntry',
+}
+
+function logWhen(at: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(at)
+}
+
+function LogList({ log, t }: { log: readonly BotLogEntry[]; t: Translate }) {
+  return (
+    <>
+      <h3 className={css.botTitle}>{t('sv.bot.logTitle')}</h3>
+      {log.length === 0 ? <p className={css.cardSummary}>{t('sv.bot.logEmpty')}</p> : (
+        <ul className={`${css.botList} ${css.botLog}`}>
+          {log.map((row, index) => {
+            const when = logWhen(row.at)
+            const source = t(row.source === 'auto' ? 'sv.bot.logAuto' : 'sv.bot.logManual')
+            const names = row.hits.map(hit => `${hit.name ?? hit.symbol} — ${t(LOG_HIT_KEY[hit.verdict])}`).join(', ')
+            const filed = row.hits
+              .filter(hit => hit.verdict === 'buy' || hit.verdict === 'add' || hit.verdict === 'sell')
+              .map(hit => `${hit.name ?? hit.symbol} — ${t(LOG_HIT_KEY[hit.verdict])}`)
+              .join(', ')
+            const line = !row.ok
+              ? t('sv.bot.logFail', { when, source })
+              : row.orderNote === 'sent'
+                ? t('sv.bot.logLineSent', {
+                  when, source, looked: String(row.looked), buys: String(row.buys), adds: String(row.adds),
+                  sells: String(row.sells), bonds: String(row.bonds), names: filed,
+                })
+                : row.orderNote === 'closed'
+                  ? t('sv.bot.logLineClosed', {
+                    when, source, looked: String(row.looked), buys: String(row.buys), adds: String(row.adds),
+                    sells: String(row.sells), bonds: String(row.bonds),
+                  })
+                  : row.orderNote === 'failed'
+                    ? t('sv.bot.logLineFailed', {
+                      when, source, looked: String(row.looked), buys: String(row.buys), adds: String(row.adds),
+                      sells: String(row.sells), bonds: String(row.bonds),
+                    })
+                    : t('sv.bot.logLine', {
+                      when, source, looked: String(row.looked), buys: String(row.buys), adds: String(row.adds),
+                      sells: String(row.sells), bonds: String(row.bonds),
+                    })
+            return (
+              <li key={`${row.at}-${row.source}-${index}`}>
+                {line}
+                {names !== '' && <div>{names}</div>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </>
+  )
 }
 
 const KIND_KEY: Record<BotKind, StrategyLocaleKey> = {
@@ -144,14 +207,9 @@ function Ladder({ ladder, t }: { ladder: BondLadder | undefined; t: Translate })
   )
 }
 
-function loadBook(): BotPosition[] {
-  const raw = readJson<BotPosition[]>(BOOK_KEY, [])
-  return Array.isArray(raw) ? raw.filter(row => typeof row?.symbol === 'string' && row.symbol !== '') : []
-}
-
 export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) {
-  const [book, setBook] = useState<BotPosition[]>(() => loadBook())
   const snap = useSyncExternalStore(robotSession.subscribe, robotSession.get)
+  const book = snap.book
   const [busy, setBusy] = useState<'submit' | null>(null)
   const busyRef = useRef<'submit' | null>(null)
   const [note, setNote] = useState<string>('')
@@ -163,24 +221,12 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
     return () => clearInterval(timer)
   }, [])
 
-  const save = (next: BotPosition[]): void => {
-    setBook(next)
-    writeJson(BOOK_KEY, next)
-    robotSession.holdBook(next)
-  }
-
-  useEffect(() => {
-    robotSession.holdBook(book)
-  }, [book])
-
   const reviews = snap.reviews
   const skippedFunds = snap.skippedFunds
   const watching = snap.watching
 
   const submit = async (): Promise<void> => {
     if (reviews === null || bridge.placeBotDryRunOrder === undefined) return
-    const orders = reviews.filter(row => row.instrument === 'share' && (row.verdict === 'buy' || row.verdict === 'add' || row.verdict === 'sell'))
-    if (orders.length === 0) return
     const liveSession = moexEquitySession()
     setNow(Date.now())
     if (liveSession !== 'trading') {
@@ -191,28 +237,9 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
     busyRef.current = 'submit'
     setBusy('submit')
     setNote('')
-    let next = book
-    let failed = 0
     try {
-    for (const action of orders) {
-      const side = action.verdict === 'sell' ? 'sell' as const : 'buy' as const
-      const result = await bridge.placeBotDryRunOrder({ symbol: action.symbol, side, quantity: action.lots })
-      if (result.order === undefined || action.reason === undefined) {
-        failed += 1
-        continue
-      }
-      if (action.verdict !== 'buy' && action.verdict !== 'add' && action.verdict !== 'sell') continue
-      next = applyBotFill(next, {
-        symbol: action.symbol,
-        ...(action.name === undefined ? {} : { name: action.name }),
-        kind: action.verdict,
-        lots: action.lots,
-        price: action.price,
-        reason: action.reason,
-      })
-    }
-    save(next)
-    setNote(failed === 0 ? t('sv.bot.sent') : t('sv.bot.failed'))
+      const result = await robotSession.file()
+      setNote(result === 'sent' ? t('sv.bot.sent') : result === 'failed' ? t('sv.bot.failed') : '')
     } finally {
       busyRef.current = null
       setBusy(null)
@@ -249,7 +276,7 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
         {session === 'trading' ? t(SESSION_KEY[session]) : t(SESSION_KEY[session], waitUntilOpen(t, now))}
       </p>
       <div className={css.mgmtRow}>
-        <button type="button" className={css.horizonBtn} disabled={busy !== null || snap.busy} onClick={() => { void robotSession.check(bridge, book) }}>
+        <button type="button" className={css.horizonBtn} disabled={busy !== null || snap.busy} onClick={() => { void robotSession.check(bridge) }}>
           {snap.busy ? t('sv.bot.checking') : t('sv.bot.check')}
         </button>
         <button
@@ -301,6 +328,7 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
       {rest !== null && (
         <p className={css.cardSummary}>{t('sv.bot.rest', rest)}</p>
       )}
+      <LogList log={snap.log} t={t} />
       <h3 className={css.botTitle}>{t('sv.bot.book')}</h3>
       {book.length === 0 ? <p className={css.cardSummary}>{t('sv.bot.bookEmpty')}</p> : (
         <ul className={css.botList}>
