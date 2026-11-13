@@ -33,6 +33,7 @@ import { ruIndicatorLabel } from './indicator-labels.ts'
 import { isDarkTheme, useDarkTheme } from './theme-mode.ts'
 import { chartXToContainerX, containerXToChartX, visibleDayMarkXs } from './chart-coordinate.ts'
 import { fiveDayWheelStep, viewportResetStrategy } from './five-day-series.ts'
+import { monthWindowFromIndex } from './chart-window.ts'
 import type { IndicatorOutput } from '@dshtrading/indicators'
 import type { Kline } from './types.ts'
 
@@ -150,6 +151,11 @@ export interface TvChartProps {
    * 换级别后数据在途的那一瞬滚轮会退回缩放。
    */
   onFiveDayWheel?: ((delta: -1 | 1) => void) | undefined
+  /**
+   * 最近 N 个日历月的可见窗口。null/缺省 = 该周期的默认右缘视窗。
+   * 分钟线放不下这么长的历史，父级在点选时改到日 K。
+   */
+  monthWindow?: number | null | undefined
 }
 
 export function IndicatorPaneTitle(props: { title?: string | undefined; live?: true | undefined; liveText?: string | undefined }): React.JSX.Element {
@@ -569,6 +575,27 @@ function TvChartImpl(props: TvChartProps): React.JSX.Element {
       candles.update(bars[index] as TvBar)
     }
   }, [bars, dataKey, props.colorMode, props.fiveDay])
+
+  // 日历月窗口：只在窗口、标的或周期变化时重设，尾部增量不抢走用户的缩放。
+  const monthStamp = useRef('')
+  useEffect(() => {
+    const chart = chartRef.current
+    if (chart === null || bars.length === 0) return
+    const stamp = `${dataKey}|${props.monthWindow ?? ''}`
+    if (monthStamp.current === stamp) return
+    const previous = monthStamp.current
+    monthStamp.current = stamp
+    if (props.monthWindow == null) {
+      const hadWindow = previous.split('|')[1]
+      if (hadWindow) {
+        chart.timeScale().resetTimeScale()
+        chart.timeScale().scrollToRealTime()
+      }
+      return
+    }
+    const from = monthWindowFromIndex(bars.map(bar => bar.time as number), props.monthWindow)
+    chart.timeScale().setVisibleLogicalRange({ from: from - 0.5, to: bars.length - 0.5 })
+  }, [bars, dataKey, props.monthWindow])
 
   // ---- 五日级别日界竖线：日界时刻 → 容器 x 坐标（滚动/缩放/换数据都要重算） ----
   const [dayMarks, setDayMarks] = useState<number[]>([])

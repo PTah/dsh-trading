@@ -27,7 +27,7 @@ import { aggregateNews as aggregateCnNews, fetchCnFundamentalsPackage } from '@d
 import { aggregateNews as aggregateHkNews, fetchHkFundamentalsPackage } from '@dshtrading/kit-hk'
 import { aggregateNews as aggregateUsNews, fetchUsFundamentalsPackage } from '@dshtrading/kit-us'
 import { aggregateNews as aggregateCryptoNews, fetchCryptoFundamentalsPackage } from '@dshtrading/kit-crypto'
-import { aggregateNews as aggregateRuNews } from '@dshtrading/kit-ru'
+import { aggregateNews as aggregateRuNews, classifyLeaderRoles, fetchIndexConstituents, LEADER_TOP_N, readNewsArticle } from '@dshtrading/kit-ru'
 import type { ChartActivationStore, CustomIndicatorRecord, CustomIndicatorStore, IndicatorApplyScope, IndicatorInstance } from '@dshtrading/indicators'
 import { carryInstanceExtras, clampActivationParams, createMemoryChartActivationStore, createMemoryCustomIndicatorStore, defaultActivationInstance, resolveIndicatorSpec, sanitizeApplyScope, sanitizeInstance, symbolScopeKey, withHiddenScopes } from '@dshtrading/indicators'
 import type { KnowledgeCard, KnowledgeCardStore, KnowledgeImportEntry, KnowledgeImportMode } from '@dshtrading/knowledge'
@@ -863,6 +863,23 @@ export const MAX_MACRO_CALENDAR_LIMIT = 400
  */
 export const PREDICTION_HISTORY_MAX_WINDOW_MS = 336 * 3600_000
 
+async function mapPool<T, R>(items: readonly T[], limit: number, run: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      const item = items[index]
+      if (item === undefined) continue
+      out[index] = await run(item)
+    }
+  }
+  const workers = Math.max(1, Math.min(limit, items.length))
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  return out
+}
+
 export class BridgeProtocolError extends Error {
   readonly status: number
   constructor(status: number, message: string) {
@@ -1131,6 +1148,52 @@ export class TradingBridge {
       }
     }
     throw lastError
+  }
+
+  /**
+   * Роли внутри IMOEX или RGBI: состав берётся с MOEX ISS, дневные закрытия — у ru-коннектора.
+   * Мост не хранит срез. Клиент сам держит ответ несколько часов.
+   */
+  async ruLeaders(universeRaw: string): Promise<{
+    ok: true
+    universe: 'imoex' | 'rgbi'
+    scanned: number
+    missing: number
+    topN: number
+    rows: ReturnType<typeof classifyLeaderRoles>
+  } | { ok: false; code: string; message: string }> {
+    const universe = universeRaw === 'rgbi' ? 'rgbi' : universeRaw === 'imoex' ? 'imoex' : null
+    if (universe === null) throw new BridgeProtocolError(400, 'ru-leaders: universe must be imoex or rgbi')
+    let members: Awaited<ReturnType<typeof fetchIndexConstituents>>
+    try {
+      members = await fetchIndexConstituents(universe === 'rgbi' ? 'RGBI' : 'IMOEX')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'MOEX ISS failed'
+      return { ok: false, code: 'TRADING_NETWORK', message }
+    }
+    if (members.length === 0) {
+      return { ok: false, code: 'TRADING_UPSTREAM_ERROR', message: 'MOEX index constituents are empty' }
+    }
+    const series = await mapPool(members, 4, async (member) => {
+      try {
+        const wire = await this.klines('ru', member.symbol, '1d', '180')
+        return {
+          symbol: member.symbol,
+          name: member.name,
+          closes: wire.klines.map(bar => bar.close).filter(close => close > 0),
+        }
+      } catch {
+        return { symbol: member.symbol, name: member.name, closes: [] as number[] }
+      }
+    })
+    return {
+      ok: true,
+      universe,
+      scanned: members.length,
+      missing: series.filter(row => row.closes.length < 64).length,
+      topN: LEADER_TOP_N,
+      rows: classifyLeaderRoles(series),
+    }
   }
 
   /**
@@ -1700,6 +1763,19 @@ export class TradingBridge {
     })
 
     return { ok: true, items: result.items, unavailable: result.unavailable }
+  }
+
+  /** Текст уже выбранной новости: страница издателя читается на стороне моста и отдаётся абзацами. */
+  async newsArticle(rawUrl: string | null): Promise<{ ok: true; title: string; sourceHost: string; paragraphs: string[] } | { ok: false; code: string; message: string }> {
+    const raw = rawUrl?.trim() ?? ''
+    if (raw === '' || raw.length > 2000) throw new BridgeProtocolError(400, 'news article: url is required')
+    try {
+      const article = await readNewsArticle(raw)
+      return { ok: true, title: article.title, sourceHost: article.sourceHost, paragraphs: article.paragraphs }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'news article failed'
+      return { ok: false, code: 'TRADING_NETWORK', message }
+    }
   }
 
   /**
@@ -3132,6 +3208,8 @@ export async function dispatchBridgeRequest(
         const limit = search.get('limit')
         return readResult(await bridge.klines(market, symbol, interval, limit))
       }
+      case '/ru-leaders':
+        return readResult(await bridge.ruLeaders(search.get('universe') ?? ''))
       case '/symbols': {
         const market = search.get('market') ?? ''
         const query = search.get('query') ?? undefined
@@ -3225,6 +3303,8 @@ export async function dispatchBridgeRequest(
         if (!market) throw new BridgeProtocolError(400, 'news: market is required')
         return readResult(await bridge.news(market, search.get('symbol'), search.get('limit')))
       }
+      case '/news/article':
+        return readResult(await bridge.newsArticle(search.get('url')))
       case '/strategies/custom': {
         return readResult(await bridge.customStrategies())
       }

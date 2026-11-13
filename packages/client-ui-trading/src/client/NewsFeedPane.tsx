@@ -4,6 +4,7 @@
  * 富途风格的紧凑列表布局，支持多数据源降级：请求部分数据源降级时把失败源在底部作为 unavailable 提示。
  */
 import { useEffect, useState } from 'react'
+import { fetchNewsArticle } from './api.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import { isAnnouncementSource } from './news-source.ts'
 import css from './news-feed-pane.module.css'
@@ -28,12 +29,6 @@ export interface NewsFeedPaneProps {
   filterType?: 'exchange' | 'media' | 'all' | undefined
   /** 国际化翻译函数 */
   t: (key: MarketLocaleKey, params?: Record<string, unknown>) => string
-}
-
-/** 仅打开 http(s) 外链（纵深防御：url 来自外部 payload，不校验 scheme 直接 open）。 */
-function openExternal(url: string): void {
-  if (!/^https?:\/\//i.test(url)) return
-  window.open(url, '_blank', 'noopener')
 }
 
 /** 相对时间（locale 词典驱动：news.time.* 键，n 为数量占位）。 */
@@ -88,12 +83,32 @@ function formatSourceLabel(source: string, t: (key: MarketLocaleKey, params?: Re
 
 export function NewsFeedPane({ items, unavailable, fullHeight = false, filterType = 'all', t }: NewsFeedPaneProps): React.JSX.Element {
   const [, setNow] = useState(Date.now())
-  
+  const [openUrl, setOpenUrl] = useState<string | null>(null)
+  const [article, setArticle] = useState<{ title: string; sourceHost: string; paragraphs: string[] } | null>(null)
+  const [articleState, setArticleState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
+
   // 每分钟更新一次相对时间
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 60000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    if (openUrl === null) return
+    let cancelled = false
+    setArticle(null)
+    setArticleState('loading')
+    fetchNewsArticle(openUrl)
+      .then((text) => {
+        if (cancelled) return
+        setArticle(text)
+        setArticleState('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setArticleState('failed')
+      })
+    return () => { cancelled = true }
+  }, [openUrl])
 
   const filteredItems = items === null ? null : (
     filterType === 'exchange'
@@ -121,11 +136,18 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
     )
   }
 
+  const opened = filteredItems.find(item => item.url === openUrl)
+
   return (
     <div className={rootClass} data-dshtrading-news-feed="">
       <ul className={css.list}>
         {filteredItems.map((item, index) => (
-          <li key={`${item.url}-${index}`} className={css.item} onClick={() => openExternal(item.url)}>
+          <li
+            key={`${item.url}-${index}`}
+            className={css.item}
+            data-open={item.url === openUrl ? 'true' : undefined}
+            onClick={() => { setOpenUrl(current => current === item.url ? null : item.url) }}
+          >
             <span className={css.source} data-type={getSourceType(item.source)}>
               {formatSourceLabel(item.source, t)}
             </span>
@@ -141,6 +163,25 @@ export function NewsFeedPane({ items, unavailable, fullHeight = false, filterTyp
           </li>
         ))}
       </ul>
+      {opened !== undefined && (
+        <article className={css.reader} data-news-reader="">
+          <div className={css.readerBar}>
+            <span className={css.readerHost}>{article?.sourceHost || formatSourceLabel(opened.source, t)}</span>
+            <button type="button" className={css.readerClose} onClick={() => { setOpenUrl(null) }}>
+              {t('news.reader.close')}
+            </button>
+          </div>
+          <h3 className={css.readerTitle}>{article?.title || opened.title}</h3>
+          {articleState === 'loading' && <p className={css.readerStatus}>{t('news.reader.loading')}</p>}
+          {articleState === 'failed' && <p className={css.readerStatus}>{t('news.reader.failed')}</p>}
+          {articleState === 'ready' && article !== null && article.paragraphs.length === 0 && (
+            <p className={css.readerStatus}>{t('news.reader.empty')}</p>
+          )}
+          {article?.paragraphs.map((paragraph, index) => (
+            <p key={index} className={css.readerText}>{paragraph}</p>
+          ))}
+        </article>
+      )}
       {unavailable !== undefined && unavailable.length > 0 && (
         <div className={css.degraded}>
           {t('news.degraded', { sources: unavailable.join(', ') })}

@@ -42,7 +42,7 @@ export const FAMILIES: Readonly<Record<string, FamilyMeta>> = {
   crypto: { label: '加密行情与账户', whenToUse: '查币种报价/K 线/资金费率/衍生品指标，或加密账户余额与下单' },
   futures: { label: '期货行情与账户', whenToUse: '查期货报价/K 线，或期货账户余额' },
   global: { label: '全球品种（金十）', whenToUse: '现货贵金属/原油/外汇/全球指数的报价与分钟线，代码先用 instruments 解析' },
-  ru: { label: '俄股 / T-Bank', whenToUse: '查 MOEX 报价/K 线，或 T-Bank 账户余额与持仓' },
+  ru: { label: '俄股 / T-Bank', whenToUse: 'MOEX / Russia 报价与 K 线（ru_get_ticker、ru_get_klines、ru_get_orderbook）和 T-Bank 账户。没有 fundamentals 工具，不要把俄股代码交给 cn、us、hk、crypto、news、flash 或金十。IMOEX 与 RGBI 是指数，不是 T-Bank 标的。' },
   instruments: { label: '标的检索', whenToUse: '跨市场按代码或名称模糊找标的，得到规范 symbol 后再调行情工具' },
   watchlist: { label: '自选股', whenToUse: '增删改查用户自选行与分组，或在 GUI 中栏切换当前标的' },
   holdings: { label: '统一资产台账', whenToUse: '任何涉及持仓、仓位、敞口、复盘的任务——先读台账再谈别的' },
@@ -51,8 +51,8 @@ export const FAMILIES: Readonly<Record<string, FamilyMeta>> = {
   screener: { label: '选股器', whenToUse: '横截面筛选（全市场扫描某条件），非单标的研判' },
   knowledge: { label: '知识库', whenToUse: '检索/读取/沉淀知识卡片，或看主题图谱' },
   tasks: { label: '定时任务', whenToUse: '创建、列出、手动运行、修改或删除定时任务' },
-  news: { label: '金十资讯', whenToUse: '金十文章列表与检索（较长的宏观/市场分析）' },
-  flash: { label: '金十快讯', whenToUse: '金十快讯流与关键词搜索（事实核查首选）' },
+  news: { label: '金十资讯', whenToUse: '金十文章列表与检索（较长的宏观/市场分析）。不用于 MOEX / 俄股。' },
+  flash: { label: '金十快讯', whenToUse: '金十快讯流与关键词搜索。不用于 MOEX / 俄股。' },
   econ: { label: '经济日历', whenToUse: '当周经济数据发布日历与共识/实际值' },
   fx: { label: '汇率', whenToUse: 'USD/CNY/HKD 换算与跨币种市值折算' },
   routing: { label: '行情路由', whenToUse: '确认各市场当前生效的数据提供方' },
@@ -87,9 +87,27 @@ export interface ToolIndexValue {
   families: IndexFamily[]
 }
 
+/** 多词 query 按词命中：`ru russia fundamentals news` 要落到 ru 与 news，而不是整句去子串匹配。 */
+function queryTokens(query: string | undefined): string[] {
+  const flat = query?.trim().toLowerCase() ?? ''
+  if (flat === '') return []
+  const parts = flat.split(/[^0-9a-z\u0400-\u04ff\u4e00-\u9fff]+/i).filter(part => part.length >= 2)
+  return parts.length > 0 ? parts : [flat]
+}
+
+function textHits(text: string, tokens: readonly string[]): boolean {
+  const hay = text.toLowerCase()
+  return tokens.some(token => {
+    // 拉丁词按整词命中，避免 ru 撞上 dry-run。中文词没有空格，仍用子串。
+    if (!/^[a-z0-9]+$/.test(token)) return hay.includes(token)
+    return new RegExp(`(?:^|[^a-z0-9])${token}(?:[^a-z0-9]|$)`).test(hay)
+  })
+}
+
 /** 现读注册面并按前缀分族；导出便于单测直接断言「索引覆盖全部工具」。 */
 export function buildToolIndex(schemas: readonly ToolSchemaLike[], query?: string, family?: string): ToolIndexValue {
   const q = query?.trim().toLowerCase()
+  const tokens = queryTokens(query)
   const fam = family?.trim().toLowerCase()
 
   const grouped = new Map<string, ToolSchemaLike[]>()
@@ -104,13 +122,14 @@ export function buildToolIndex(schemas: readonly ToolSchemaLike[], query?: strin
   for (const [key, tools] of [...grouped.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))) {
     if (fam && key !== fam) continue
     const meta = FAMILIES[key]
-    // 命中判定：族标识/族说明命中，或该族内任一工具名/简介命中。
-    const nameHit = !!q && (key.includes(q) || (meta?.label ?? '').toLowerCase().includes(q))
-    const noteHit = !!q && (meta?.whenToUse ?? '').toLowerCase().includes(q)
-    const familyHit = !q || nameHit || noteHit
-    const hitTools = tools.filter(t => !q
-      || t.name.toLowerCase().includes(q)
-      || (t.description ?? '').toLowerCase().includes(q))
+    // 命中判定：任一查询词命中族标识/族说明，或该族内任一工具名/简介。
+    const familyHit = tokens.length === 0
+      || textHits(key, tokens)
+      || textHits(meta?.label ?? '', tokens)
+      || textHits(meta?.whenToUse ?? '', tokens)
+    const hitTools = tools.filter(t => tokens.length === 0
+      || textHits(t.name, tokens)
+      || textHits(t.description ?? '', tokens))
     if (!familyHit && hitTools.length === 0) continue
     const listed = familyHit ? tools : hitTools
     families.push({
@@ -125,10 +144,10 @@ export function buildToolIndex(schemas: readonly ToolSchemaLike[], query?: strin
   }
 
   families.sort((a, b) => {
-    if (!q) return 0
+    if (tokens.length === 0) return 0
     const rank = (f: IndexFamily) => {
       const meta = FAMILIES[f.family]
-      return f.family.includes(q) || (meta?.label ?? '').toLowerCase().includes(q) ? 0 : 1
+      return textHits(f.family, tokens) || textHits(meta?.label ?? '', tokens) ? 0 : 1
     }
     return rank(a) - rank(b)
   })

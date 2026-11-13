@@ -33,6 +33,68 @@
   background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
 }
 
+.item[data-open='true'] {
+  background: var(--dsw-futu-bg-surface-hover, rgba(0, 0, 0, 0.04));
+}
+
+.reader {
+  padding: 10px 14px 16px;
+  border-top: 1px solid var(--dsw-futu-border-default, #e3e6ea);
+}
+
+.readerBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.readerHost {
+  font-size: 11px;
+  color: var(--dsw-futu-text-muted, #8e95a3);
+}
+
+.readerClose {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--dsw-futu-text-link, #1f6feb);
+  cursor: pointer;
+}
+
+.readerTitle {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.readerStatus,
+.readerText {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-futu-text-primary, #1a1e24);
+}
+
+.pane.fullHeight {
+  display: flex;
+  flex-direction: column;
+}
+
+.pane.fullHeight .list {
+  flex: none;
+  max-height: 42%;
+  overflow-y: auto;
+}
+
+.pane.fullHeight .reader {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .source {
   flex-shrink: 0;
   padding: 1px 5px;

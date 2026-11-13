@@ -253,6 +253,21 @@ export function normalizeRuSymbol(raw: string): string {
   return s
 }
 
+/** 指数代码不是 T-Bank 可交易标的。在打 FindInstrument 之前拒绝，避免「instrument not found」。 */
+const RU_INDEX_TICKERS = new Set(['IMOEX', 'RGBI', 'RTSI', 'MOEX'])
+
+export function assertTradableRuSymbol(symbol: string): string {
+  const canonical = normalizeRuSymbol(symbol)
+  const ticker = canonical.split('.')[0] ?? canonical
+  if (RU_INDEX_TICKERS.has(ticker)) {
+    throw new TradingServiceError(
+      'TRADING_SYMBOL_NOT_FOUND',
+      `${ticker} is a MOEX index, not a T-Bank instrument. Quote a share, fund or bond ticker (for example OZON).`,
+    )
+  }
+  return canonical
+}
+
 function splitSymbol(symbol: string): { ticker: string; classCode?: string } {
   const [ticker, classCode] = symbol.split('.', 2)
   return classCode ? { ticker, classCode } : { ticker }
@@ -413,7 +428,7 @@ export class TBankRestClient {
   }
 
   async resolveInstrument(symbol: string, credentials: TBankCredentials): Promise<TBankInstrument> {
-    const canonical = normalizeRuSymbol(symbol)
+    const canonical = assertTradableRuSymbol(symbol)
     const cached = this.instrumentCache.get(canonical)
     if (cached) return cached
 

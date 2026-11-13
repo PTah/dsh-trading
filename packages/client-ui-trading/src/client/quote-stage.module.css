@@ -284,6 +284,20 @@
   display: none;
 }
 
+.monthTabs {
+  display: flex;
+  gap: 3px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--dsw-futu-border-subtle, #edf0f3);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.monthTabs::-webkit-scrollbar {
+  display: none;
+}
+
 .intervalTab {
   appearance: none;
   border: none;

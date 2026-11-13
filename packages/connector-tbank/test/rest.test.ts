@@ -10,6 +10,7 @@ import {
 } from '../src/index.js'
 import {
   INTERVAL_MAX_WINDOW_MS,
+  assertTradableRuSymbol,
   bondQuoteFromParts,
   moexRowsFromInstruments,
   TBankRestClient,
@@ -76,6 +77,12 @@ describe('T-Bank symbol vocabulary', () => {
   it('Agent: rejects malformed symbols', () => {
     // Given / When / Then
     expect(() => normalizeRuSymbol('sber!')).toThrow(TradingServiceError)
+  })
+
+  it('Agent: rejects MOEX index codes before they are looked up as shares', () => {
+    expect(assertTradableRuSymbol('ozon')).toBe('OZON')
+    expect(() => assertTradableRuSymbol('IMOEX')).toThrow(/MOEX index/)
+    expect(() => assertTradableRuSymbol('rgbi')).toThrow(TradingServiceError)
   })
 })
 

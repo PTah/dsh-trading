@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import { fetchKlines, fetchMarkets, fetchSymbols, fetchTickers, subscribeTradingEvents, type SymbolInfo } from './api.ts'
+import { fetchKlines, fetchMarkets, fetchRuLeaders, fetchSymbols, fetchTickers, subscribeTradingEvents, type RuLeaderRow, type SymbolInfo } from './api.ts'
 import { searchAllMarkets, searchSymbols, setDynamicCatalog, updateDynamicCatalog } from './symbol-catalog.ts'
 import type { MarketLocaleKey } from './contract.ts'
 import type { Observable, SelectionState, WatchlistGroupOpResult, WatchlistGroupsState, WatchlistSortMode, WatchlistSortPrefs, WatchlistSortZone, Watchlists } from './store.ts'
@@ -138,6 +138,21 @@ const SORT_OPTIONS: readonly WatchlistSortMode[] = [
   'default', 'name', 'ticker', 'type', 'price-desc', 'price-asc', 'yield-desc', 'yield-asc',
 ]
 
+const LEADER_LABEL_KEY: Record<RuLeaderRow['label'], MarketLocaleKey> = {
+  stable: 'leaders.label.stable',
+  holding: 'leaders.label.holding',
+  rising: 'leaders.label.rising',
+  new: 'leaders.label.new',
+  outsider: 'leaders.label.outsider',
+}
+
+function leaderLabel(template: string, row: RuLeaderRow): string {
+  return template
+    .replaceAll('{rank}', String(row.rank))
+    .replaceAll('{previous}', String(row.previousRank ?? row.rank))
+    .replaceAll('{weeks}', String(row.weeksInTop))
+}
+
 const LISTING_LABEL: Record<InstrumentListing, MarketLocaleKey> = {
   share: 'listing.share',
   fund: 'listing.fund',
@@ -261,6 +276,29 @@ export function MarketSidebar({
     fund: false,
     bond: false,
   })
+  const [leaders, setLeaders] = useState<Record<'imoex' | 'rgbi', RuLeaderRow[]>>({ imoex: [], rgbi: [] })
+  const [leadersStatus, setLeadersStatus] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
+  const [roleOpen, setRoleOpen] = useState<Record<string, boolean>>({ 'imoex:leader': true })
+  useEffect(() => {
+    if (!browsingRu) return
+    let cancelled = false
+    setLeadersStatus('loading')
+    const load = async (): Promise<void> => {
+      try {
+        const shares = await fetchRuLeaders('imoex')
+        if (cancelled) return
+        setLeaders(prev => ({ ...prev, imoex: shares.rows }))
+        setLeadersStatus('ready')
+        const bonds = await fetchRuLeaders('rgbi')
+        if (cancelled) return
+        setLeaders(prev => ({ ...prev, rgbi: bonds.rows }))
+      } catch {
+        if (!cancelled) setLeadersStatus(current => current === 'ready' ? current : 'failed')
+      }
+    }
+    void load()
+    return () => { cancelled = true }
+  }, [browsingRu])
   useEffect(() => {
     if (draft.trim() === '' || ruSections === null) return
     setCatalogOpen({
@@ -937,8 +975,6 @@ export function MarketSidebar({
           )
         })()}
 
-      {browsingRu && <div className={css.catalogHint}>{t('sidebar.catalog.hint')}</div>}
-
       {/* 列表表头（第三列是排序开关：默认顺序 → 涨幅从高到低 → 涨幅从低到高） */}
       {!browsingRu && (
         <>
@@ -951,9 +987,96 @@ export function MarketSidebar({
         </>
       )}
 
-      {/* 俄罗斯页签：全市场名册，按股票 / 基金 / 债券分组。点行看行情，按钮才进自选。 */}
       {browsingRu ? (
-        ruCatalog === null && !ruCatalogError ? (
+        <div className={css.list} role="listbox" aria-label={t('tab.ru')}>
+      <div className={css.catalogHint}>{t('leaders.hint')}</div>
+      {leadersStatus === 'loading' && leaders.imoex.length === 0 && (
+        <div className={css.empty}>{t('leaders.loading')}</div>
+      )}
+      {leadersStatus === 'failed' && (
+        <div className={css.empty}>{t('leaders.failed')}</div>
+      )}
+      {(['imoex', 'rgbi'] as const).map((universe) => {
+        const needle = draft.trim().toLowerCase()
+        const matched = leaders[universe].filter(row => needle === '' || row.symbol.toLowerCase().includes(needle) || row.name.toLowerCase().includes(needle))
+        if (matched.length === 0) return null
+        const roles = ['leader', 'growing', 'outsider'] as const
+        return (
+          <div key={universe}>
+            <div className={css.leadersUniverse}>{t(universe === 'imoex' ? 'leaders.universe.imoex' : 'leaders.universe.rgbi')}</div>
+            {roles.map((role) => {
+              const section = matched.filter(row => row.role === role)
+              if (section.length === 0) return null
+              const openKey = `${universe}:${role}`
+              const open = roleOpen[openKey] === true || needle !== ''
+              const roleKey = role === 'leader' ? 'leaders.role.leader' : role === 'growing' ? 'leaders.role.growing' : 'leaders.role.outsider'
+              return (
+                <div key={openKey} role="group" aria-label={t(roleKey)}>
+                  <button
+                    type="button"
+                    className={css.catalogSection}
+                    aria-label={t(roleKey)}
+                    aria-expanded={open}
+                    onClick={() => { setRoleOpen(prev => ({ ...prev, [openKey]: !open })) }}
+                  >
+                    <span className={css.catalogCaret} data-open={open ? 'true' : undefined} aria-hidden="true" />
+                    <span>{t(roleKey)}</span>
+                    <span className={css.catalogCount}>{section.length}</span>
+                  </button>
+                  {open && section.map(row => {
+                    const key = rowKey('ru', row.symbol)
+                    const selected = selection !== null && selection.market === 'ru' && selection.symbol === row.symbol
+                    const instrument: Instrument = { market: 'ru', symbol: row.symbol, name: row.name }
+                    return (
+                      <button
+                        key={`${universe}:${row.symbol}`}
+                        type="button"
+                        role="option"
+                        className={css.row}
+                        data-row-key={key}
+                        data-catalog="true"
+                        data-leader-role={row.role}
+                        data-selected={selected ? 'true' : undefined}
+                        aria-selected={selected}
+                        onClick={() => { selectInstrument(instrument) }}
+                      >
+                        <span className={css.idents}>
+                          <span className={css.name}>{row.name}</span>
+                          <span className={css.codeRow}>
+                            <span className={css.code}>{row.symbol}</span>
+                            <span className={css.roleTag} data-role={row.role} title={leaderLabel(t(LEADER_LABEL_KEY[row.label]), row)}>
+                              {leaderLabel(t(LEADER_LABEL_KEY[row.label]), row)}
+                            </span>
+                          </span>
+                        </span>
+                        {!favoriteKeys.has(key) ? (
+                          <span
+                            role="button"
+                            className={css.catalogAdd}
+                            aria-label={t('sidebar.catalog.add')}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              addInstrument('ru', instrument)
+                            }}
+                          >
+                            {t('sidebar.catalog.add')}
+                          </span>
+                        ) : (
+                          <span className={css.remove} aria-label={t('sidebar.catalog.inList')}>✓</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+      <div className={css.catalogHint}>{t('sidebar.catalog.hint')}</div>
+
+      {/* 俄罗斯页签：全市场名册，按股票 / 基金 / 债券分组。点行看行情，按钮才进自选。 */}
+      {ruCatalog === null && !ruCatalogError ? (
           <div className={css.empty}>{t('sidebar.catalog.loading')}</div>
         ) : rows.length === 0 ? (
           <div className={css.empty}>
@@ -962,7 +1085,7 @@ export function MarketSidebar({
               : t('sidebar.catalog.empty')}
           </div>
         ) : (
-          <div className={css.list} role="listbox" aria-label={t('tab.ru')}>
+          <>
             {RU_LISTING_ORDER.map((listing) => {
               const section = ruSections?.[listing] ?? []
               if (section.length === 0) return null
@@ -990,8 +1113,9 @@ export function MarketSidebar({
                 </div>
               )
             })}
-          </div>
-        )
+          </>
+        )}
+        </div>
       ) : rows.length === 0 && !loadError
         ? (
             <div className={css.empty}>

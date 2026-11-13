@@ -240,8 +240,8 @@ it('admin：每个委派 preset 复用角色装配并携带委派纪律', async 
     // 角色预设里没有这段纪律，否则普通会话会把自己当成一次性子代理。
     expect(personaOf(role)).not.toContain('one-shot delegate')
     // registry 没有可见性开关，名册靠文案与顺序表达用途。
-    expect(preset.name).toBe(`${role.name}（委派）`)
-    expect(preset.description).toContain('仅供 Master 委派启动')
+    expect(preset.name).toBe(`${role.name} (поручение)`)
+    expect(preset.description).toContain('разового поручения')
     expect(preset.order!).toBeGreaterThan(role.order!)
     // 委派不再委派：自身不挂子代理与后台作业行。
     expect(preset.plugins.some(row => row.name === '@deepseek-ai/dsh-tool-subagent')).toBe(false)

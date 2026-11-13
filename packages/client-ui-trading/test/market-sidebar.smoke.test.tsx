@@ -31,6 +31,7 @@ const net = vi.hoisted(() => ({
   series: {} as Record<string, Kline[]>,
   markets: [] as Array<{ id: 'crypto' | 'us' | 'cn' | 'hk' | 'ru' }>,
   symbols: [] as Array<{ symbol: string; name?: string; listing?: 'share' | 'fund' | 'bond' }>,
+  leaders: [] as Array<{ symbol: string; name: string; role: 'leader' | 'growing' | 'outsider'; rank: number; previousRank: number | null; weeksInTop: number; label: 'stable' | 'holding' | 'rising' | 'new' | 'outsider' }>,
 }))
 
 vi.mock('../src/client/api.ts', async (importOriginal) => {
@@ -40,6 +41,7 @@ vi.mock('../src/client/api.ts', async (importOriginal) => {
     fetchMarkets: async () => net.markets,
     // 断网桩：全集预取与在线联想一律空，序列完全由 net 决定。
     fetchSymbols: async () => net.symbols,
+    fetchRuLeaders: async () => ({ universe: 'imoex' as const, scanned: net.leaders.length, missing: 0, topN: 10, rows: net.leaders }),
     fetchTickers: async () => ({}),
     fetchKlines: async (market: MarketId, symbol: string, interval: string, limit: number): Promise<Kline[]> => {
       net.calls.push({ market, symbol, interval, limit })
@@ -89,6 +91,7 @@ beforeEach(() => {
   net.series = {}
   net.markets = []
   net.symbols = []
+  net.leaders = []
 })
 
 afterEach(() => {
@@ -230,5 +233,20 @@ describe('MarketSidebar 迷你走势编排冒烟', () => {
     const bondRow = view.getByText('ОФЗ 26238').closest('button')
     expect(shareRow?.getAttribute('data-listing')).toBe('share')
     expect(bondRow?.getAttribute('data-listing')).toBe('bond')
+  })
+
+  it('Agent: the Russia tab opens the IMOEX leaders and keeps the full catalog folded', async () => {
+    net.markets = [{ id: 'ru' }]
+    net.symbols = [{ symbol: 'SBER', name: 'Сбербанк', listing: 'share' }]
+    net.leaders = [{ symbol: 'GAZP', name: 'Газпром', role: 'leader', rank: 1, previousRank: 1, weeksInTop: 8, label: 'stable' }]
+    renderSidebar([])
+    await waitFor(() => { expect(screen.getByRole('tab', { name: 'tab.ru' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('tab', { name: 'tab.ru' }))
+    const name = await screen.findByText('Газпром')
+    const row = name.closest('button')
+    expect(row?.getAttribute('data-catalog')).toBe('true')
+    expect(row?.closest('[role="listbox"]')).toBeTruthy()
+    expect(screen.getAllByText('leaders.label.stable').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Сбербанк')).toBeNull()
   })
 })

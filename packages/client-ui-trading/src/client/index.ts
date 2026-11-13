@@ -25,6 +25,7 @@ import type { ISessions, SessionTarget } from '@deepseek-ai/dsh-api-session-cont
 import type { IndicatorMarketScope, IndicatorRegistry } from '@dshtrading/indicators'
 import type { Instrument, MarketId } from './types.ts'
 import { createSelectionStore, createWatchlistGroupsStore, createWatchlistSortStore, createWatchlistStore } from './store.ts'
+import { installComposerSelectionContext } from './composer-context.ts'
 import { createChartStateStore } from './chart-state.ts'
 import { indicators, unmarkCustomIndicator } from './indicator-registry.ts'
 import { customIndicatorLoader } from './indicator-load.ts'
@@ -81,6 +82,8 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-trading-market: dictionaries')
 
   const selection = createSelectionStore()
+  // 左栏点过的标的在发送时写进宿主 composer。宿主包只读，插在它自己的提交之前。
+  installComposerSelectionContext(() => selection.getSnapshot().instrument)
   const watchlists = createWatchlistStore()
   const watchlistGroups = createWatchlistGroupsStore()
   const watchlistSort = createWatchlistSortStore()

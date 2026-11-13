@@ -26,7 +26,7 @@ Status: implemented
 - `listInstruments` 拉 T-Bank Shares/Etfs/Bonds 的可交易 MOEX 板块；失败时退回 `RU_LIQUID_SHARES`。选股器仍按扫描上限截断。策略页在原有六条日 K 规则上增加 `trend-sma`、`rsi-14-band`、`peak-drawdown`。「ИИ-аналитика」把这些规则收成一个动作：купить / держать / сократить / подождать。不调用语言模型，也不构成投资建议。
 - 债券报价附 `ticker.bond`：T-Bank 点数价是名义的百分比，买入现金 = 净价 + НКД（`BondBy.nominal` / `aciValue`）。价格低于名义约 98% 时「держать」升为小仓买入；高于约 102% 时「купить」降为持有。НКД 不改动作，只写进支票说明。
 - 报价头用 `ticker.about` 说明纸是什么：`GetInstrumentBy` 的板块与行业枚举、`BondBy` 的到期日和年付息次数。OFZ 是 `SU` 开头的国债。官方名称与代码相同就不重复代码，只留说明和代码一行。未知行业不编造公司业务。
-- 右缘「Новости」和报价页新闻走 `kit-ru` 的 Google News RSS（`hl=ru`，`gl=RU`），不再用金十快讯。宏观面板仍是金十中文源，默认地区改为俄罗斯/美国/中国。预测市场页签从右缘拿掉，Polymarket 没有俄罗斯盘口。
+- 右缘「Новости」和报价页新闻走 `kit-ru` 的 Google News RSS（`hl=ru`，`gl=RU`），不再用金十快讯。点一条新闻在同一页签里读出版者正文，不另开浏览器。宏观面板仍是金十中文源，默认地区改为俄罗斯/美国/中国。预测市场页签从右缘拿掉，Polymarket 没有俄罗斯盘口。
 - 债券/期货/期权、stop-orders、stream 行情未接线；本切片覆盖股票/ETF 类 FindInstrument 命中品种的行情与普通限价/市价单。
 - profile overrides：凡已装本仓的 trading-web 等 profile 需同步 `@dshtrading/{connector-tbank,kit-ru,ru}`（replication 坑 #15）；桌面壳需重跑 `build-runtime` 才把 ru 打进安装包。
 

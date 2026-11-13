@@ -2,7 +2,7 @@ import type { TradingErrorCode } from '@dshtrading/api'
 
 /** 本连接器的凭证提示（错误消息里必须给出可执行的配置路径 —— BYOK 铁律）。 */
 export const TOKEN_HINT =
-  '配置金十 MCP Token：设置中心 dshtrading.credentials.jin10.token，或环境变量 JIN10_MCP_TOKEN。'
+  '配置金十 MCP Token：设置中心 dshtrading.credentials.jin10.token，或环境变量 JIN10_MCP_TOKEN。 Jin10 is a China macro feed and is not used for MOEX shares.'
 
 /** 错误词汇对齐 @dshtrading/api（本包不做跨包 Error 类基座，与 connector-eastmoney 同款）。 */
 export class Jin10Error extends Error {

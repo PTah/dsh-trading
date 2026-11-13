@@ -17,6 +17,7 @@ import {
   type GuiApprovalContextProps, type OrderIntentTracker,
 } from './gui-approval.ts'
 import { TvChart, toBar } from './TvChart.tsx'
+import { CHART_MONTH_WINDOWS } from './chart-window.ts'
 import { FundamentalsStage } from './FundamentalsStage.tsx'
 import { DerivativesPane } from './DerivativesPane.tsx'
 import { DerivativesStage } from './DerivativesStage.tsx'
@@ -232,6 +233,8 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
     if (market === undefined) return '1d'
     return readInterval(market)
   })
+  /** 可见历史窗口（日历月）。null = 沿用该周期的默认右缘视窗。 */
+  const [chartMonths, setChartMonths] = useState<number | null>(null)
   const [daily, setDaily] = useState<Kline[] | null>(null)
   const [klines, setKlines] = useState<Kline[] | null>(null)
   /** klines 所属级别：切级别后旧的上一级别数据在途期间不得被当成新级别数据消费
@@ -1140,11 +1143,34 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
                 className={css.intervalTab}
                 data-active={entry === chartInterval ? 'true' : undefined}
                 onClick={() => {
+                  setChartMonths(null)
                   setIntervalFor(entry)
                   writeInterval(market, entry)
                 }}
               >
                 {t(INTERVAL_KEY[entry] ?? 'interval.1d')}
+              </button>
+            ))}
+          </div>
+          <div className={css.monthTabs} role="tablist" aria-label={t('chart.window.label')}>
+            {CHART_MONTH_WINDOWS.map(months => (
+              <button
+                key={months}
+                type="button"
+                role="tab"
+                aria-selected={chartMonths === months}
+                className={css.intervalTab}
+                data-active={chartMonths === months ? 'true' : undefined}
+                onClick={() => {
+                  const next = chartMonths === months ? null : months
+                  setChartMonths(next)
+                  if (next !== null && INTRADAY_INTERVALS.has(chartInterval)) {
+                    setIntervalFor('1d')
+                    writeInterval(market, '1d')
+                  }
+                }}
+              >
+                {t('chart.window.months', { n: months })}
               </button>
             ))}
           </div>
@@ -1298,6 +1324,7 @@ export function QuoteStage({ t, useSelection, useChart, toggleIndicator, setIndi
               <TvChart
                 bars={bars}
                 dataKey={`${market}:${symbol}:${chartInterval}`}
+                monthWindow={chartMonths}
                 intraday={INTRADAY_INTERVALS.has(chartInterval)}
                 {...(fiveDayProps !== undefined ? { fiveDay: fiveDayProps } : {})}
                 {...(fiveDayProps !== undefined && stats.prevClose !== undefined ? { percentRef: stats.prevClose } : {})}

@@ -490,7 +490,7 @@ function createReadTools(deps: {
   return [
     defineTool({
       name: 'ru_get_ticker',
-      description: 'Get last price for a MOEX instrument via T-Bank Invest (SBER / SBER.TQBR).',
+      description: 'Get last price for a tradable MOEX share, fund or bond via T-Bank (OZON / SBER.TQBR). IMOEX and RGBI are indexes, not instruments. There is no fundamentals method on this tool.',
       parameters: {
         symbol: { type: 'string', required: true, description: 'TICKER or TICKER.CLASSCODE' },
       },
@@ -505,7 +505,7 @@ function createReadTools(deps: {
     }),
     defineTool({
       name: 'ru_get_klines',
-      description: 'Get historical candles from T-Bank Invest.',
+      description: 'Get historical candles for a tradable MOEX share, fund or bond from T-Bank. Do not pass index codes IMOEX or RGBI.',
       parameters: {
         symbol: { type: 'string', required: true },
         interval: { type: 'string', enum: INTERVAL_VOCABULARY, default: '1d' },

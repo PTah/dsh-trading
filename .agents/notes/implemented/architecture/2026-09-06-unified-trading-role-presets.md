@@ -8,7 +8,7 @@ Status: implemented
 
 ## Decision
 
-base 新增唯一角色安装器，从 loader 的有效启用市场 bundle 行获取能力资产，生成 master（大师）、trader（交易员）、instrument-researcher（标的分析研究员）、risk-reviewer（风险审查员）。原市场 host 行保留配置兼容，但不再写旧预设。市场 connector realm 与路由、安全默认值继续由市场资产拥有；共享知识库、持仓等 host 行不复制入角色。
+base 新增唯一角色安装器，从 loader 的有效启用市场 bundle 行获取能力资产，生成 master（大师）、trader（交易员）、instrument-researcher（标的分析研究员）、risk-reviewer（风险审查员）。名册上用户看见的名称和说明是俄语：Мастер、Трейдер、Исследователь бумаги、Проверка риска；委派副本带后缀 «(поручение)». 人设正文仍是英文。市场 ru（含用户消息里的 `[Бумага …]`）只调用 ru_get_ticker / ru_get_klines / ru_get_orderbook / ru_get_balance / ru_get_positions；没有俄股基本面工具，也不要把 MOEX 代码交给 cn、us 或金十。IMOEX 与 RGBI 是指数，不是 T-Bank 标的。原市场 host 行保留配置兼容，但不再写旧预设。市场 connector realm 与路由、安全默认值继续由市场资产拥有；共享知识库、持仓等 host 行不复制入角色。
 
 master 是全能型多 agent 团队主导者：组合形态 = trader 的市场连接器/kit 行 + base 捆绑技能（company-analysis、weekly-trading-plan、content-insight、dynamic-capabilities）+ 三个 `@deepseek-ai/dsh-tool-subagent` 委派实例（provider: fork，backgroundMode: one-shot）。每个实例绑定一个专员 persona——`researcher_subagent` 携带标的分析研究员纪律、`trader_subagent` 携带交易员纪律、`risk_reviewer_subagent` 携带风险审查员纪律——并统一追加一次性子代理边界（只产分析与建议文本，不下单不撤单，执行由大师会话过审批闸门完成）。owner 要求细分问题（标的分析、交易计划草拟、方案复核）委派给对应子代理，交叉核对后整合单一结论；交易执行仍走 dry-run 默认与审批闸门。委派行不 provide 服务，无需 realm；宿主 base 层已常驻 `subagents` 服务与 fork 后端，工具行默认禁用、由预设按需挂载（同官方 standard 的分工）。
 

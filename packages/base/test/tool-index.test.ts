@@ -50,6 +50,18 @@ describe('buildToolIndex', () => {
     expect(out.families.every(f => f.family === 'holdings')).toBe(true)
   })
 
+  it('用户：多词 query 按词命中俄股与资讯，而不是整句落空', () => {
+    const out = buildToolIndex([
+      ...schemas,
+      { name: 'ru_get_ticker', description: 'MOEX last price.' },
+      { name: 'news_search', description: 'Jin10 articles.' },
+    ], 'ru russia fundamentals news')
+    const names = out.families.map(f => f.family)
+    expect(names).toContain('ru')
+    expect(names).toContain('news')
+    expect(names).not.toContain('cn')
+  })
+
   it('用户：query 命中工具名时只返回命中的工具', () => {
     // Given 工具名片段 klines
     // When 带 query 构建索引

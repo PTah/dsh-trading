@@ -141,3 +141,6 @@ export function apply(ctx: Context, config: Config): void {
 }
 
 export { aggregateNews } from './news.ts'
+export { readNewsArticle } from './article.ts'
+export { classifyLeaderRoles, fetchIndexConstituents, LEADER_TOP_N } from './leaders.ts'
+export type { LeaderConstituent, LeaderLabel, LeaderRole, LeaderRow, LeaderSeries, LeaderUniverse } from './leaders.ts'
