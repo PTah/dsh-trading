@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { StrategyLocaleKey } from './contract.ts'
 import type { BotLogEntry } from './bot-log.ts'
+import { bookedNames } from './BotHoldings.tsx'
 import { robotSession } from './robot-session.ts'
 import css from './StrategyView.module.css'
 
@@ -25,12 +26,14 @@ function bannerParams(t: Translate, last: BotLogEntry | undefined, fallbackAt: n
 export function RobotBanner({ t }: { t: Translate }) {
   const snap = useSyncExternalStore(robotSession.subscribe, robotSession.get)
   const last = snap.log[0]
+  const book = bookedNames(t)
   return (
     <p className={css.robotBanner}>
       {snap.watching
         ? t(last !== undefined && !last.ok ? 'sv.bot.bannerFail' : 'sv.bot.bannerOn', bannerParams(t, last, snap.checkedAt))
         : t('sv.bot.bannerIdle')}
       {snap.busy ? ` ${t('sv.bot.checking')}` : ''}
+      {book !== '' && <span className={css.robotBannerBook}>{book}</span>}
     </p>
   )
 }

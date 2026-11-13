@@ -52,6 +52,38 @@
   border-bottom: 1px solid var(--dsw-futu-border-subtle);
 }
 
+.robotBannerBook {
+  display: block;
+  margin-top: 4px;
+  color: var(--dsw-futu-text-primary);
+  font-weight: 600;
+}
+
+.botHoldings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 720px;
+}
+
+.botTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.botTable th,
+.botTable td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--dsw-futu-border-subtle);
+}
+
+.botTable th {
+  color: var(--dsw-futu-text-secondary);
+  font-weight: 600;
+}
+
 .horizonSelector {
   display: flex;
   gap: 6px;

@@ -209,7 +209,6 @@ function Ladder({ ladder, t }: { ladder: BondLadder | undefined; t: Translate })
 
 export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) {
   const snap = useSyncExternalStore(robotSession.subscribe, robotSession.get)
-  const book = snap.book
   const [busy, setBusy] = useState<'submit' | null>(null)
   const busyRef = useRef<'submit' | null>(null)
   const [note, setNote] = useState<string>('')
@@ -329,14 +328,6 @@ export function BotPane({ t, bridge }: { t: Translate; bridge: BotPaneBridge }) 
         <p className={css.cardSummary}>{t('sv.bot.rest', rest)}</p>
       )}
       <LogList log={snap.log} t={t} />
-      <h3 className={css.botTitle}>{t('sv.bot.book')}</h3>
-      {book.length === 0 ? <p className={css.cardSummary}>{t('sv.bot.bookEmpty')}</p> : (
-        <ul className={css.botList}>
-          {book.map(row => (
-            <li key={row.symbol}>{row.symbol} · {row.lots} · {t('sv.bot.add')}: {row.adds}</li>
-          ))}
-        </ul>
-      )}
     </div>
   )
 }

@@ -37,6 +37,7 @@ import { stanceOf } from './signal-brief.ts'
 import { advise, type InvestorAction } from './investor-advice.ts'
 import { adjustBondAdvice, bondAciIsMaterial, type BondQuote } from './bond-advice.ts'
 export { strategyName, strategySummary, paramLabel, exitReasonText } from './strategy-locale.ts'
+import { BotHoldings } from './BotHoldings.tsx'
 import { BotPane } from './BotPane.tsx'
 import css from './StrategyView.module.css'
 
@@ -521,6 +522,7 @@ export function StrategyView({ t, bridge, useSelection }: StrategyViewProps) {
 
   return (
     <div className={css.root} data-dshtrading-strategy-view="">
+      <BotHoldings t={t} />
       {/* 1. 分区分段控件（选股策略 | 量化策略） */}
       <div className={css.header}>
         <div className={css.horizonSelector} role="tablist">
